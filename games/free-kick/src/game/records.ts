@@ -1,7 +1,7 @@
 import type { StageSet } from '../types';
 
 /**
- * ブラウザに保存する記録（ver.c.4）。
+ * ブラウザに保存する記録（ver.4.0.c から共通。キーは旧名 ver.c.4 時代のまま変えない）。
  * localStorage が使えない環境（プライベートモード等）でも例外を出さずにメモリ上で動かす。
  */
 export interface StageRecord {

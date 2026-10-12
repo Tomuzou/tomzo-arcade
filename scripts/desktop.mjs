@@ -8,7 +8,7 @@ const project = fileURLToPath(new URL("../", import.meta.url));
 const runtime = path.join(project, ".desktop");
 const origin = "http://127.0.0.1:4180";
 const health = `${origin}/__tomzo_arcade_desktop__`;
-// --page=free-kick/ver.c.4/ のように /tomzo-arcade/ 以下のページを指定できる（省略時はハブ）
+// --page=free-kick/ver.4.0.c/ のように /tomzo-arcade/ 以下のページを指定できる（省略時はハブ）
 const page = (process.argv.find((arg) => arg.startsWith("--page="))?.slice(7) ?? "")
   .replace(/^\/+/, "");
 if (!/^[\w.\-/]*$/.test(page)) throw new Error(`Invalid page: ${page}`);

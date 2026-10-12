@@ -1,13 +1,13 @@
 {
   "name": "@tomzo-arcade/free-kick",
   "private": true,
-  "version": "1.0.0-g.1",
+  "version": "4.1.0-c",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "node --test tests/progress.test.mjs",
+    "test": "node --test tests/records.test.mjs",
     "test:browser": "playwright test",
     "verify:archives": "node scripts/verify-archives.mjs"
   },

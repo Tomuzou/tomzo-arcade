@@ -15,10 +15,10 @@ CLAUDE.md と games/free-kick/CLAUDE.md を読んで、TOMZO ARCADE の現状を
 現状（2026-10-12 時点）:
 - このリポジトリ（Tomuzou/tomzo-arcade、ブランチ main）はブラウザのミニゲーム集。公開URLは https://tomuzou.github.io/tomzo-arcade/ 。main に push すると GitHub Actions がテスト・ビルド・検証して GitHub Pages に公開する
 - 構成は npm workspaces：hub/（ゲーム一覧・PWA）、packages/core/（共通処理）、games/<id>/（各ゲーム）。ゲームの追加手順は CLAUDE.md の「ゲームを追加する手順」
-- 収録ゲームは games/free-kick/（FREE KICK LAB）の1本。最新版は Codex 版 ver.g.1。Claude 版 ver.c.1〜4 と旧 v1/v2 は public/ の凍結ビルド
+- 収録ゲームは games/free-kick/（FREE KICK 3D / FREE KICK LAB）の1本。最新版は ver.4.1.c（ver.4.0.c を引き継いだ Claude 版、src/）。過去版 ver.1.0.c / 2.0.c / 3.0.c / 3.1.g（Codex 版）/ 4.0.c は public/ の凍結ビルド。旧名（ver.c.N, ver.g.1, v1, v2）は転送ページで新しい名前へ飛ぶ（2026-10-12 に改名）
 - FREE KICK LAB は旧リポジトリ Tomuzou/soccer-app から移した。旧URL /soccer-app/… は soccer-app 側の転送ページで /tomzo-arcade/free-kick/… へ飛ぶ。開発履歴は soccer-app に残っている
-- ver.c.4 のソースは games/free-kick/c4/ にある（2026-10-12 に soccer-app の claude-c4 ブランチから移した）。直したら games/free-kick/ で npm run build:c4 を実行すると public/ver.c.4/ が作り直される（仕様は games/free-kick/c4/CLAUDE.md）
-- ブラウザテスト（Playwright）はソフトウェア描画で遅く、全部で20分以上かかる。CI では回していない
+- 版の凍結手順と版名のルールは games/free-kick/CLAUDE.md の「バージョン」
+- FREE KICK のブラウザテスト（Playwright）は本番ビルドを preview して全版の表示・リンク・旧名転送を確認する（npm run build のあと ARCHIVE_CHECK=1 npm run test:browser、約20秒）。CI では回していない。ゲームプレイ自体のブラウザテストは ver.3.1.g 用しかなかったので今は無い
 - Git Bash で /で始まる引数（--base=/… など）を渡すときは MSYS_NO_PATHCONV=1 を付ける
 
 ---
@@ -26,7 +26,7 @@ CLAUDE.md と games/free-kick/CLAUDE.md を読んで、TOMZO ARCADE の現状を
 ## 残っている課題（次に貼るプロンプト例）
 
 - **動きのもっさり対策**（未着手。どのバージョン・どの場面で重いかをユーザーにまだ聞けていない）
-  「FREE KICK LAB の動きが重い。まず ver.g.1 と ver.c.4 の描画負荷（解像度・影・材質・再描画）を比べて原因を絞って。そのうえで packages/core に全ゲーム共通の画質設定（高／標準／軽量）を作り、まず ver.g.1 に入れて」
+  「FREE KICK LAB の動きが重い。まず最新版 ver.4.1.c と ver.3.1.g の描画負荷（解像度・影・材質・再描画）を比べて原因を絞って。そのうえで packages/core に全ゲーム共通の画質設定（高／標準／軽量）を作り、まず ver.4.1.c に入れて」
 - **2本目・3本目のゲーム追加**（候補：../bowling-app、../claw-machine-app。まだ中身を確認していない）
   「../bowling-app の中身を確認して、CLAUDE.md の手順どおり games/bowling/ としてアーケードに追加して。ハブのカードとサムネイルも作って」
 - **ハブの拡充**（必要になったら）：最近遊んだゲーム、ゲームごとの自己ベスト表示、カテゴリ分けなど

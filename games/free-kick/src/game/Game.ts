@@ -1,30 +1,43 @@
-import * as THREE from "three";
-import * as CANNON from "cannon-es";
+import * as THREE from 'three';
+import * as CANNON from 'cannon-es';
 import type {
   GameCallbacks,
   GamePhase,
   GameState,
+  ItemId,
   ObstacleDef,
   ScoreZone,
   StageDefinition,
   StageGoal,
   StageSet,
   TargetZone,
-} from "../types";
-import { STAGES_A, STAGES_B, STAGES_C, STAGES_D } from "./stages";
-import { Sfx } from "./sfx";
-import { itemFor, type ItemId } from "./items";
-import { makeBallSurface, makeTurfSurface } from "./surfaces";
+} from '../types';
+import { STAGES_A, STAGES_B, STAGES_C, STAGES_D } from './stages';
+import { Sfx } from './sfx';
+import { skillBall } from './items';
+import {
+  PLAYER_BASE_H,
+  addStadium,
+  makeBallTextures,
+  makeGrassTexture,
+  makeNetTexture,
+  makePlayerMesh,
+  makeSky,
+} from './scenery';
 
 // --- ゲーム定数（単位はメートル） ---
 const GOAL_WIDTH = 7.32; // 実寸のゴール幅
 const GOAL_HEIGHT = 2.44; // 実寸のゴール高さ
 const GOAL_Z = -18; // ゴールラインの位置（ボールからの距離 = 約18m）
 const POST_RADIUS = 0.06;
-const BALL_RADIUS = 0.11;
+const BALL_RADIUS = 0.15;
 const POST_COLOR = 0xffffff; // 通常のポスト色
 const POST_HIGHLIGHT = 0xff5a3c; // ミッション対象ポストの強調色（オレンジ赤）
 const BALL_MASS = 0.43; // FIFA規定球の質量（kg）
+/** 太陽の方向（影・空の太陽のにじみに使う） */
+const SUN_DIR = new THREE.Vector3(-0.45, 0.8, 0.35).normalize();
+/** 地平線付近の空の色（フォグと揃える） */
+const HORIZON_COLOR = 0xc9dcec;
 
 const MIN_SPEED = 16; // パワー0のときの初速
 const MAX_SPEED = 30; // パワー1のときの初速
@@ -50,6 +63,21 @@ const FLIGHT_LINEAR_DAMPING = 0.01;
 /** スピンの空気減衰（実球の回転は飛行中ほとんど落ちない） */
 const FLIGHT_ANGULAR_DAMPING = 0.08;
 
+/** 物理の固定サブステップ（毎ステップ空力を加え、フレームレートに左右されない弾道にする） */
+const PHYS_STEP = 1 / 120;
+/** ドライブの縦回転（rad/s）。マグヌス力で重力の約2倍の下向き加速度を生む */
+const DRIVE_TOPSPIN = 55;
+/** ナックルの揺れ加速度（m/s²）横・縦 */
+const KNUCKLE_ACC_X = 12;
+const KNUCKLE_ACC_Y = 7;
+/** ブーメラン：マグヌス力を序盤は弱く、この秒数かけて最大まで強める（遅れて鋭く曲がる） */
+const BOOMERANG_RAMP_TIME = 0.6;
+/** ブーメランのマグヌス倍率（序盤→最大） */
+const BOOMERANG_MAGNUS_MIN = 0.25;
+const BOOMERANG_MAGNUS_MAX = 1.5;
+/** 弾道ラインの最大点数（固定バッファを使い回す） */
+const TRAIL_POINTS = 360;
+
 const MAX_SHOT_TIME = 6; // 1ショットの最大飛行時間（秒）。跳ね返り続けを強制終了する保険
 
 const NET_DEPTH = 1.6; // ゴール奥行き（ネットの深さ）
@@ -58,7 +86,7 @@ const NET_FLASH_TIME = 0.7; // ゴール時にネットが光って揺れる演�
 /** 動く障害物（キーパー）の実体 */
 interface MovingObstacle {
   /** sweep=sin往復 / track=ボール追従（AIキーパー） */
-  kind: "sweep" | "track";
+  kind: 'sweep' | 'track';
   body: CANNON.Body;
   mesh: THREE.Object3D;
   baseX: number;
@@ -93,16 +121,10 @@ export class Game {
   private renderer: THREE.WebGLRenderer;
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
-  private controlsBounds: { left: number; right: number; top: number } | null = null;
   private world: CANNON.World;
 
   private ballMesh!: THREE.Mesh;
   private ballBody!: CANNON.Body;
-  private ballRadius = BALL_RADIUS;
-  private physicsAccumulator = 0;
-  private sceneDirty = true;
-  private previousBall = new CANNON.Vec3();
-  private aeroForce = new CANNON.Vec3();
   private barBody!: CANNON.Body;
   private postLBody!: CANNON.Body;
   private postRBody!: CANNON.Body;
@@ -121,26 +143,14 @@ export class Game {
 
   // ネットの当たり判定（ボールを受け止めて止める）
   private netBodies = new Set<CANNON.Body>();
-  private ballPhysMat = new CANNON.Material("ball");
-  private netPhysMat = new CANNON.Material("net");
-  private postPhysMat = new CANNON.Material("post");
-  private groundPhysMat = new CANNON.Material("ground");
+  private ballPhysMat = new CANNON.Material('ball');
+  private netPhysMat = new CANNON.Material('net');
+  private postPhysMat = new CANNON.Material('post');
+  private groundPhysMat = new CANNON.Material('ground');
   private groundBody!: CANNON.Body;
 
   /** 効果音（WebAudio合成） */
   private sfx = new Sfx();
-  private freeShotLimit = 0;
-  private trailEnabled = true;
-  private trailCount = 0;
-  private trailPositions = new Float32Array(180 * 3);
-  private trailLine = new THREE.Line(
-    new THREE.BufferGeometry(),
-    new THREE.LineBasicMaterial({
-      color: 0xc6f36b,
-      transparent: true,
-      opacity: 0.85,
-    }),
-  );
 
   // 現在ステージの風速（m/s）。飛行中の空力計算に対気速度として入る
   private windX = 0;
@@ -190,6 +200,22 @@ export class Game {
   /** 制限球を使い切って失敗 → 結果表示後にステージ先頭へ戻すフラグ */
   private stageFailPending = false;
 
+  // --- ver.4.0.c で追加：スキルボール・弾道・固定ステップ ---
+  /** 固定の壁（ゴーストがすり抜ける対象。キーパーは含めない） */
+  private wallBodies = new Set<CANNON.Body>();
+  /** このショットでゴースト効果が有効か */
+  private ghostActive = false;
+  /** ナックルの揺れ用の位相（ショットごとにランダム） */
+  private knucklePhase = [0, 0, 0, 0];
+  /** キックからの経過時間（物理時間） */
+  private flightTime = 0;
+  private physicsAccumulator = 0;
+  private trailLine!: THREE.Line;
+  private trailPositions = new Float32Array(TRAIL_POINTS * 3);
+  private trailCount = 0;
+  private trailEnabled = true;
+  private aeroForce = new CANNON.Vec3();
+
   // 飛行中の接触フラグ（ショットごとにリセット）
   private shotHitBar = false;
   private shotHitPostL = false;
@@ -197,27 +223,30 @@ export class Game {
 
   // UI へ反映する状態
   private state: GameState = {
-    item: "none",
     mode: null,
-    phase: "aiming",
+    phase: 'aiming',
     score: 0,
     attempts: 0,
     lastResult: null,
     power: 0,
     curve: 0,
-    stageSet: "a",
+    stageSet: 'a',
     stageIndex: 0,
     stageCount: STAGES_A.length,
-    stageName: "",
-    mission: "",
+    stageName: '',
+    mission: '',
     stageAttempts: 0,
     shotLimit: 0,
     shotsLeft: 0,
-    progressText: "",
+    progressText: '',
     stageCleared: false,
     allCleared: false,
     windX: 0,
     windZ: 0,
+    item: 'normal',
+    shotKmh: 0,
+    streak: 0,
+    stageItemUsed: false,
   };
 
   constructor(container: HTMLElement, callbacks: GameCallbacks) {
@@ -226,21 +255,20 @@ export class Game {
 
     // --- レンダラー ---
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.15;
+    // 高DPI端末で描画負荷が跳ね上がらないよう上限を設ける
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.shadowMap.autoUpdate = false;
-    this.renderer.shadowMap.needsUpdate = true;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.05;
     container.appendChild(this.renderer.domElement);
 
     // --- シーン・カメラ ---
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0xb9d6e6);
-    this.scene.fog = new THREE.Fog(0xb9d6e6, 42, 95);
+    this.scene.background = new THREE.Color(HORIZON_COLOR);
+    this.scene.fog = new THREE.Fog(HORIZON_COLOR, 60, 160);
+    this.scene.add(makeSky(SUN_DIR, HORIZON_COLOR));
 
     this.camera = new THREE.PerspectiveCamera(
       55,
@@ -259,15 +287,7 @@ export class Game {
     this.setupGoal();
     this.setupBall();
     this.setupAimArrow();
-    this.scene.add(this.trailLine);
-    this.trailLine.geometry.setAttribute(
-      "position",
-      new THREE.BufferAttribute(this.trailPositions, 3).setUsage(
-        THREE.DynamicDrawUsage,
-      ),
-    );
-    this.trailLine.geometry.setDrawRange(0, 0);
-    this.trailLine.frustumCulled = false;
+    this.setupTrail();
     // タイトル画面では照準を出さない
     this.aimArrow.visible = false;
 
@@ -275,7 +295,6 @@ export class Game {
     this.resizeObserver = new ResizeObserver(() => this.onResize());
     this.resizeObserver.observe(container);
     this.bindInput();
-    this.onResize();
 
     this.emitState();
     this.clock.start();
@@ -287,58 +306,38 @@ export class Game {
   // ---------------------------------------------------------------------------
 
   private setupLights(): void {
-    const ambient = new THREE.HemisphereLight(0xdceeff, 0x546c32, 1.6);
-    this.scene.add(ambient);
+    // 空（青）と芝（緑）の照り返しを含む環境光＋太陽光
+    this.scene.add(new THREE.HemisphereLight(0xcfe6ff, 0x4a6b33, 1.1));
 
-    const sun = new THREE.DirectionalLight(0xffefce, 2.6);
-    sun.position.set(-8, 15, 6);
+    const sun = new THREE.DirectionalLight(0xfff3e0, 2.6);
+    sun.position.copy(SUN_DIR).multiplyScalar(40).add(new THREE.Vector3(0, 0, -8));
+    sun.target.position.set(0, 0, -8);
+    this.scene.add(sun.target);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
-    sun.shadow.normalBias = 0.025;
-    sun.shadow.bias = -0.0001;
-    sun.shadow.camera.left = -20;
-    sun.shadow.camera.right = 20;
-    sun.shadow.camera.top = 20;
-    sun.shadow.camera.bottom = -20;
-    sun.shadow.camera.far = 60;
+    sun.shadow.mapSize.set(2048, 2048);
+    // プレー範囲（ボール〜ゴール裏）に絞って影を細かくする
+    sun.shadow.camera.left = -16;
+    sun.shadow.camera.right = 16;
+    sun.shadow.camera.top = 16;
+    sun.shadow.camera.bottom = -16;
+    sun.shadow.camera.near = 1;
+    sun.shadow.camera.far = 90;
+    sun.shadow.bias = -0.0004;
+    sun.shadow.normalBias = 0.02;
     this.scene.add(sun);
   }
 
   private setupGround(): void {
     // 刈り込みストライプの入った芝生
-    const tex = makeTurfSurface();
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.wrapT = THREE.RepeatWrapping;
-    tex.anisotropy = Math.min(4, this.renderer.capabilities.getMaxAnisotropy());
+    const tex = makeGrassTexture(this.renderer.capabilities.getMaxAnisotropy());
+    // 1タイル=10m四方（5m幅のストライプ2本）。縦横とも敷き詰めて芝目の縮尺を揃える
+    tex.repeat.set(6, 8);
     const geo = new THREE.PlaneGeometry(60, 80);
-    const mat = new THREE.MeshStandardMaterial({
-      map: tex,
-      bumpMap: tex,
-      bumpScale: 0.018,
-      roughness: 0.95,
-    });
+    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95 });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.rotation.x = -Math.PI / 2;
     mesh.receiveShadow = true;
     this.scene.add(mesh);
-    const stripes = new THREE.InstancedMesh(
-      new THREE.PlaneGeometry(60, 5),
-      new THREE.MeshBasicMaterial({
-        color: 0x172b10,
-        transparent: true,
-        opacity: 0.09,
-        depthWrite: false,
-      }),
-      8,
-    );
-    const stripePose = new THREE.Object3D();
-    stripePose.rotation.x = -Math.PI / 2;
-    for (let i = 0; i < 8; i++) {
-      stripePose.position.set(0, 0.006, -37.5 + i * 10);
-      stripePose.updateMatrix();
-      stripes.setMatrixAt(i, stripePose.matrix);
-    }
-    this.scene.add(stripes);
 
     this.addPitchMarkings();
     this.addSurroundings();
@@ -360,7 +359,7 @@ export class Game {
     );
   }
 
-  /** 濃淡2色の刈り込みストライプ＋粒状ノイズの芝テクスチャを生成する */
+  /** ピッチの白線（ゴールライン・ペナルティエリア・ゴールエリア・PKスポット・アーク）を実寸で描く */
   private addPitchMarkings(): void {
     const LINE_W = 0.12;
     const lineMat = new THREE.MeshBasicMaterial({
@@ -401,14 +400,7 @@ export class Game {
     // ワールドZ > paFront ⇔ sinθ < -(16.5-11)/9.15 となる区間を切り出す
     const a = Math.asin((16.5 - 11) / 9.15);
     const arc = new THREE.Mesh(
-      new THREE.RingGeometry(
-        9.15 - LINE_W / 2,
-        9.15 + LINE_W / 2,
-        48,
-        1,
-        Math.PI + a,
-        Math.PI - 2 * a,
-      ),
+      new THREE.RingGeometry(9.15 - LINE_W / 2, 9.15 + LINE_W / 2, 48, 1, Math.PI + a, Math.PI - 2 * a),
       lineMat,
     );
     arc.rotation.x = -Math.PI / 2;
@@ -416,88 +408,13 @@ export class Game {
     this.scene.add(arc);
   }
 
-  /** スタジアムの雰囲気づくり（ゴール裏の広告ボードと遠景のスタンド） */
+  /** スタジアム（観客席・広告ボード・照明塔） */
   private addSurroundings(): void {
-    const boardColors = [
-      0x1f6feb, 0xe11d48, 0xf5f5f5, 0x0ea55e, 0xf5a623, 0x1f6feb,
-    ];
-    boardColors.forEach((color, i) => {
-      const board = new THREE.Mesh(
-        new THREE.BoxGeometry(5.9, 0.9, 0.15),
-        new THREE.MeshStandardMaterial({ color }),
-      );
-      board.position.set(-15 + i * 6, 0.45, GOAL_Z - 3.4);
-      board.castShadow = true;
-      this.scene.add(board);
-    });
-
-    // Stepped concrete terraces and instanced seats: depth without thousands of draws.
-    const concrete = new THREE.MeshStandardMaterial({
-      color: 0x899394,
-      roughness: 0.95,
-    });
-    const seats = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(0.4, 0.35, 0.42),
-      new THREE.MeshStandardMaterial({ roughness: 0.7 }),
-      600,
-    );
-    const pose = new THREE.Object3D();
-    let seat = 0;
-    for (let row = 0; row < 6; row++) {
-      const tier = new THREE.Mesh(
-        new THREE.BoxGeometry(54, 0.45, 1.15),
-        concrete,
-      );
-      tier.position.set(0, 0.3 + row * 0.52, GOAL_Z - 9 - row * 1.2);
-      this.scene.add(tier);
-      for (let col = 0; col < 100; col++) {
-        pose.position.set(
-          -26.4 + col * 0.53,
-          0.65 + row * 0.52,
-          tier.position.z,
-        );
-        pose.updateMatrix();
-        seats.setMatrixAt(seat, pose.matrix);
-        seats.setColorAt(
-          seat++,
-          new THREE.Color(
-            col % 20 < 3 ? 0xd3ddd7 : row % 2 ? 0x244a5b : 0x356e7d,
-          ),
-        );
-      }
-    }
-    this.scene.add(seats);
-    const canopy = new THREE.Mesh(
-      new THREE.BoxGeometry(56, 0.15, 8),
-      new THREE.MeshStandardMaterial({
-        color: 0xb6c1c5,
-        metalness: 0.3,
-        roughness: 0.6,
-      }),
-    );
-    canopy.position.set(0, 5.8, GOAL_Z - 12.5);
-    this.scene.add(canopy);
-    const supportMaterial = new THREE.MeshStandardMaterial({
-      color: 0x63777d,
-      metalness: 0.45,
-      roughness: 0.4,
-    });
-    for (const x of [-26, -13, 0, 13, 26]) {
-      const support = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.1, 0.1, 5.8, 6),
-        supportMaterial,
-      );
-      support.position.set(x, 2.9, GOAL_Z - 15.7);
-      this.scene.add(support);
-    }
+    addStadium(this.scene, GOAL_Z);
   }
 
   private setupGoal(): void {
-    const postMat = new THREE.MeshStandardMaterial({
-      color: POST_COLOR,
-      metalness: 0.25,
-      roughness: 0.28,
-    });
+    const postMat = new THREE.MeshStandardMaterial({ color: POST_COLOR, roughness: 0.28, metalness: 0.25 });
     const halfW = GOAL_WIDTH / 2;
 
     // 各ポストは色を個別に変えられるよう専用マテリアルを持たせる
@@ -509,11 +426,7 @@ export class Game {
       );
       const mesh = new THREE.Mesh(
         geo,
-        new THREE.MeshStandardMaterial({
-          color: POST_COLOR,
-          metalness: 0.25,
-          roughness: 0.28,
-        }),
+        new THREE.MeshStandardMaterial({ color: POST_COLOR, roughness: 0.28, metalness: 0.25 }),
       );
       mesh.position.set(x, GOAL_HEIGHT / 2, GOAL_Z);
       mesh.castShadow = true;
@@ -593,16 +506,12 @@ export class Game {
     this.scene.add(top);
 
     // ネットを張る後方フレーム（クロスバー両端→後方地面への支柱と、後方の地面バー）
-    const addTube = (
-      from: THREE.Vector3,
-      to: THREE.Vector3,
-      r: number,
-    ): void => {
+    const addTube = (from: THREE.Vector3, to: THREE.Vector3, r: number): void => {
       const dir = new THREE.Vector3().subVectors(to, from);
       const len = dir.length();
       const tube = new THREE.Mesh(
         new THREE.CylinderGeometry(r, r, len, 8),
-        new THREE.MeshStandardMaterial({ color: POST_COLOR }),
+        new THREE.MeshStandardMaterial({ color: POST_COLOR, roughness: 0.28, metalness: 0.25 }),
       );
       tube.position.copy(from).addScaledVector(dir, 0.5);
       tube.quaternion.setFromUnitVectors(
@@ -643,22 +552,8 @@ export class Game {
       backZ - backHalfZ,
     );
     // 左 / 右 / 天井
-    this.addNetBody(
-      t,
-      GOAL_HEIGHT / 2,
-      NET_DEPTH / 2,
-      -halfW,
-      GOAL_HEIGHT / 2,
-      midZ,
-    );
-    this.addNetBody(
-      t,
-      GOAL_HEIGHT / 2,
-      NET_DEPTH / 2,
-      halfW,
-      GOAL_HEIGHT / 2,
-      midZ,
-    );
+    this.addNetBody(t, GOAL_HEIGHT / 2, NET_DEPTH / 2, -halfW, GOAL_HEIGHT / 2, midZ);
+    this.addNetBody(t, GOAL_HEIGHT / 2, NET_DEPTH / 2, halfW, GOAL_HEIGHT / 2, midZ);
     this.addNetBody(GOAL_WIDTH / 2, t, NET_DEPTH / 2, 0, GOAL_HEIGHT, midZ);
 
     // ボールとネットは低反発・高摩擦で接触（跳ね返さず受け止める）
@@ -699,31 +594,9 @@ export class Game {
     this.netBodies.add(body);
   }
 
-  /** ネット用のグリッド模様テクスチャを生成する */
+  /** ネット用の網目テクスチャ（細かい目） */
   private makeNetTexture(): THREE.Texture {
-    const size = 128;
-    const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext("2d")!;
-    ctx.clearRect(0, 0, size, size);
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
-    ctx.lineWidth = 1.8;
-    const step = size / 4;
-    for (let i = 0; i <= 4; i++) {
-      ctx.beginPath();
-      ctx.moveTo(i * step, 0);
-      ctx.lineTo(i * step, size);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(0, i * step);
-      ctx.lineTo(size, i * step);
-      ctx.stroke();
-    }
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.wrapT = THREE.RepeatWrapping;
-    return tex;
+    return makeNetTexture(this.renderer.capabilities.getMaxAnisotropy());
   }
 
   /** 指定サイズのネットパネル（グリッド模様の半透明面）を作る */
@@ -732,10 +605,10 @@ export class Game {
     h: number,
     segW = 1,
     segH = 1,
-    opacity = 0.8,
+    opacity = 0.75,
   ): THREE.Mesh {
     const tex = this.makeNetTexture();
-    const cell = 0.4; // Four 10cm cells per texture tile.
+    const cell = 0.14; // ネットの目の大きさ（m）
     tex.repeat.set(
       Math.max(1, Math.round(w / cell)),
       Math.max(1, Math.round(h / cell)),
@@ -746,8 +619,7 @@ export class Game {
       transparent: true,
       opacity,
       side: THREE.DoubleSide,
-      alphaTest: 0,
-      toneMapped: false,
+      alphaTest: 0.05,
       depthWrite: false,
     });
     mat.userData.baseOpacity = opacity;
@@ -756,13 +628,17 @@ export class Game {
   }
 
   private setupBall(): void {
-    const geo = new THREE.SphereGeometry(BALL_RADIUS, 40, 28);
-    const surface = makeBallSurface();
-    const mat = new THREE.MeshStandardMaterial({
-      map: surface.color,
-      bumpMap: surface.bump,
-      bumpScale: 0.0006,
-      roughness: 0.52,
+    const geo = new THREE.SphereGeometry(BALL_RADIUS, 48, 32);
+    const { map, bump } = makeBallTextures();
+    map.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+    // 合成皮革のツヤ（クリアコート）と縫い目の凹み
+    const mat = new THREE.MeshPhysicalMaterial({
+      map,
+      bumpMap: bump,
+      bumpScale: 1.2,
+      roughness: 0.5,
+      clearcoat: 0.45,
+      clearcoatRoughness: 0.35,
     });
     this.ballMesh = new THREE.Mesh(geo, mat);
     this.ballMesh.castShadow = true;
@@ -775,13 +651,12 @@ export class Game {
       angularDamping: FLIGHT_ANGULAR_DAMPING,
       material: this.ballPhysMat,
     });
-    this.ballBody.addEventListener("collide", this.onBallCollide);
+    this.ballBody.addEventListener('collide', this.onBallCollide);
     this.world.addBody(this.ballBody);
 
     this.resetBall();
   }
 
-  /** 白地に黒の五角形パネルを並べた、伝統的なサッカーボール模様のテクスチャを生成する */
   private setupAimArrow(): void {
     this.aimArrow = new THREE.ArrowHelper(
       new THREE.Vector3(0, 0, -1),
@@ -794,12 +669,42 @@ export class Game {
     this.scene.add(this.aimArrow);
   }
 
+  /** 弾道ライン（直前のショットの軌跡）。固定長バッファを drawRange で伸ばす */
+  private setupTrail(): void {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(this.trailPositions, 3));
+    geo.setDrawRange(0, 0);
+    this.trailLine = new THREE.Line(
+      geo,
+      new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 }),
+    );
+    this.trailLine.frustumCulled = false;
+    this.scene.add(this.trailLine);
+  }
+
+  private clearTrail(): void {
+    this.trailCount = 0;
+    this.trailLine.geometry.setDrawRange(0, 0);
+  }
+
+  private pushTrailPoint(): void {
+    if (this.trailCount >= TRAIL_POINTS) return;
+    const p = this.ballBody.position;
+    this.trailPositions.set([p.x, p.y, p.z], this.trailCount * 3);
+    this.trailCount += 1;
+    const geo = this.trailLine.geometry;
+    geo.attributes.position.needsUpdate = true;
+    geo.setDrawRange(0, this.trailCount);
+  }
+
   /** ボールが何かに衝突したとき、効果音を鳴らし、飛行中ならバー・ポストへの接触を記録する */
   private onBallCollide = (event: {
     body: CANNON.Body | null;
     contact?: CANNON.ContactEquation;
   }): void => {
     if (!event.body) return;
+    // ゴースト中にすり抜けた壁は音も接触記録も出さない
+    if (this.ghostActive && this.wallBodies.has(event.body)) return;
     // 衝突の強さ（法線方向の相対速度）。効果音の音量・省略判定に使う
     const impact = Math.abs(event.contact?.getImpactVelocityAlongNormal() ?? 0);
     // ネット接触はフェーズに関係なく強く減衰させ、引っかかって進ませない
@@ -816,13 +721,10 @@ export class Game {
       event.body === this.postRBody;
     if (isFrame) {
       if (impact > 1.5) this.sfx.post();
-    } else if (
-      event.body === this.groundBody ||
-      this.obstacleBodies.has(event.body)
-    ) {
+    } else if (event.body === this.groundBody || this.obstacleBodies.has(event.body)) {
       this.sfx.bounce(impact / 12);
     }
-    if (this.state.phase !== "shooting") return;
+    if (this.state.phase !== 'shooting') return;
     if (event.body === this.barBody) {
       this.shotHitBar = true;
     } else if (event.body === this.postLBody) {
@@ -837,15 +739,15 @@ export class Game {
   // ---------------------------------------------------------------------------
 
   /** フリープレイを開始する */
-  startFreePlay(shotLimit = 0): void {
-    this.state.item = "none";
-    this.freeShotLimit = Math.max(0, Math.floor(shotLimit));
-    this.stageFailPending = false;
+  startFreePlay(): void {
     this.clearStageObjects();
     this.setWind(0, 0);
-    this.state.mode = "free";
+    this.state.mode = 'free';
     this.state.score = 0;
     this.state.attempts = 0;
+    this.state.streak = 0;
+    this.state.shotKmh = 0;
+    this.state.item = 'normal';
     this.state.stageCleared = false;
     this.state.allCleared = false;
     this.resetForNextShot();
@@ -853,8 +755,6 @@ export class Game {
 
   /** ステージモードを開始する（set='a'=α / 'b'=β / 'c'=γ / 'd'=δ、既定は最初のステージ） */
   startStage(set: StageSet, index = 0): void {
-    this.state.item = "none";
-    this.freeShotLimit = 0;
     const sets: Record<StageSet, StageDefinition[]> = {
       a: STAGES_A,
       b: STAGES_B,
@@ -864,9 +764,7 @@ export class Game {
     this.stages = sets[set];
     this.state.stageSet = set;
     this.state.stageCount = this.stages.length;
-    this.loadStage(
-      THREE.MathUtils.clamp(Math.floor(index), 0, this.stages.length - 1),
-    );
+    this.loadStage(index);
   }
 
   /** クリア後に次のステージへ進む */
@@ -887,8 +785,6 @@ export class Game {
   retryShot(): void {
     if (this.state.mode === null) return;
     if (this.state.stageCleared) return;
-    if (this.freeShotLimit > 0 && this.state.attempts >= this.freeShotLimit)
-      return;
     // phase が 'shooting' のときだけ失敗として計上される（finishShot 内のガード）
     this.finishShot(false, false, 0, 0);
     // 制限球切れでステージ失敗が確定した場合はリセットせず、結果表示→先頭戻しに任せる
@@ -898,10 +794,6 @@ export class Game {
 
   /** タイトル画面へ戻る */
   returnToMenu(): void {
-    this.sceneDirty = true;
-    this.stageFailPending = false;
-    this.trailCount = 0;
-    this.trailLine.visible = false;
     this.clearStageObjects();
     this.setWind(0, 0);
     this.dragging = false;
@@ -910,22 +802,26 @@ export class Game {
     this.state.stageCleared = false;
     this.state.allCleared = false;
     this.state.power = 0;
+    this.state.item = 'normal';
     this.resetBall();
+    this.clearTrail();
     this.aimArrow.visible = false;
-    this.setPhase("aiming");
+    this.setPhase('aiming');
   }
 
   /** 指定インデックスのステージを読み込む */
   private loadStage(index: number): void {
     this.clearStageObjects();
     const stage = this.stages[index];
-    this.state.mode = "stage";
+    this.state.mode = 'stage';
     this.state.stageIndex = index;
     this.state.stageName = stage.name;
     this.state.mission = stage.mission;
     this.state.stageAttempts = 0;
     this.state.stageCleared = false;
     this.state.allCleared = false;
+    this.state.stageItemUsed = false;
+    this.state.shotKmh = 0;
     // γ：累積ミッションと球数制限を初期化
     this.stageGoal = stage.goal ?? null;
     this.goalProgress = 0;
@@ -952,14 +848,14 @@ export class Game {
   private updateProgressText(): void {
     const g = this.stageGoal;
     if (!g) {
-      this.state.progressText = "";
+      this.state.progressText = '';
       return;
     }
-    if (g.type === "quota") {
+    if (g.type === 'quota') {
       this.state.progressText = `${this.goalProgress} / ${g.need} ゴール`;
-    } else if (g.type === "combo") {
+    } else if (g.type === 'combo') {
       this.state.progressText = `連続 ${this.goalProgress} / ${g.need}`;
-    } else if (g.type === "bingo") {
+    } else if (g.type === 'bingo') {
       const hit = this.bingoHit.filter(Boolean).length;
       this.state.progressText = `${hit} / ${g.zones.length} 的`;
     } else {
@@ -978,13 +874,13 @@ export class Game {
       this.scene.add(this.targetMesh);
     }
     // γ：bingo/score の判定ゾーンを生成して色分け表示する
-    if (stage.goal?.type === "bingo" || stage.goal?.type === "score") {
+    if (stage.goal?.type === 'bingo' || stage.goal?.type === 'score') {
       this.goalZones = stage.goal.zones;
       this.bingoHit = this.goalZones.map(() => false);
       // bingo は zone と mesh が 1:1 で並ぶ（達成時に該当 mesh を緑へ変える）
       for (const zone of this.goalZones) {
         const color =
-          stage.goal.type === "score"
+          stage.goal.type === 'score'
             ? this.scoreZoneColor((zone as ScoreZone).points)
             : 0xff3355;
         const mesh = this.makeTargetMesh(zone, color, 0.32);
@@ -992,7 +888,7 @@ export class Game {
         this.scene.add(mesh);
       }
       // スコアゾーンは点数の表示札を別レイヤーで添える
-      if (stage.goal.type === "score") {
+      if (stage.goal.type === 'score') {
         for (const zone of this.goalZones) {
           const label = this.makeScoreLabel((zone as ScoreZone).points, zone);
           this.scene.add(label);
@@ -1013,14 +909,14 @@ export class Game {
 
   /** スコアゾーンの得点を示す数字スプライトを作る */
   private makeScoreLabel(points: number, zone: TargetZone): THREE.Sprite {
-    const canvas = document.createElement("canvas");
+    const canvas = document.createElement('canvas');
     canvas.width = 128;
     canvas.height = 128;
-    const ctx = canvas.getContext("2d")!;
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 88px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 88px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
     ctx.fillText(`${points}`, 64, 70);
     const tex = new THREE.CanvasTexture(canvas);
     const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
@@ -1047,9 +943,9 @@ export class Game {
   private addObstacle(def: ObstacleDef): void {
     const dynamic = !!(def.move || def.track);
 
-    // 見た目：AIキーパーは人型、それ以外（壁・往復キーパー）は直方体
+    // 見た目：キーパー（AI・往復）は構えた人型、壁は選手の列。当たり判定は下の箱のまま
     let mesh: THREE.Object3D;
-    if (def.track) {
+    if (dynamic) {
       const keeper = this.makeKeeperMesh();
       // 基準サイズで組んだ人型を def のサイズに合わせて拡縮
       keeper.scale.set(
@@ -1059,14 +955,7 @@ export class Game {
       );
       mesh = keeper;
     } else {
-      const geo = new THREE.BoxGeometry(def.w, def.h, def.d);
-      const color = def.move ? 0x1f6feb : 0x8b4513; // 往復キーパー=青 / 壁=茶
-      const box = new THREE.Mesh(
-        geo,
-        new THREE.MeshStandardMaterial({ color }),
-      );
-      box.castShadow = true;
-      mesh = box;
+      mesh = this.makeWallMesh(def.w, def.h);
     }
     mesh.position.set(def.x, def.y, def.z);
     this.scene.add(mesh);
@@ -1081,10 +970,11 @@ export class Game {
     body.position.set(def.x, def.y, def.z);
     this.world.addBody(body);
     this.obstacleBodies.add(body);
+    if (!dynamic) this.wallBodies.add(body);
 
     if (def.track) {
       this.movingObstacles.push({
-        kind: "track",
+        kind: 'track',
         body,
         mesh,
         baseX: def.x,
@@ -1097,7 +987,7 @@ export class Game {
       });
     } else if (def.move) {
       this.movingObstacles.push({
-        kind: "sweep",
+        kind: 'sweep',
         body,
         mesh,
         baseX: def.x,
@@ -1112,50 +1002,34 @@ export class Game {
   }
 
   /**
-   * AIキーパーの人型メッシュ（Group）を基準サイズで作る。
+   * キーパーの人型メッシュ（Group）を基準サイズで作る。
    * 原点はボディ中心。腕を広げた幅が基準幅に収まるよう組み、
    * 実サイズへの拡縮は呼び出し側が group.scale で行う。
    */
   private makeKeeperMesh(): THREE.Group {
-    const group = new THREE.Group();
-    const jersey = new THREE.MeshStandardMaterial({ color: 0xe11d48 }); // ユニフォーム
-    const skin = new THREE.MeshStandardMaterial({ color: 0xf2c79b }); // 肌
-    const gloves = new THREE.MeshStandardMaterial({ color: 0xfacc15 }); // グローブ
+    const group = makePlayerMesh({ jersey: 0xf2c94c, shorts: 0x1f2937, socks: 0xf2c94c }, true);
+    group.scale.y = KEEPER_BASE_H / PLAYER_BASE_H;
+    // scale は呼び出し側で上書きされるので、高さ合わせは内側のグループで行う
+    const outer = new THREE.Group();
+    outer.add(group);
+    return outer;
+  }
 
-    const halfH = KEEPER_BASE_H / 2;
-    const add = (mesh: THREE.Mesh, x: number, y: number, z = 0): void => {
-      mesh.position.set(x, y, z);
-      mesh.castShadow = true;
-      group.add(mesh);
-    };
-
-    // 頭
-    add(
-      new THREE.Mesh(new THREE.SphereGeometry(0.17, 16, 16), skin),
-      0,
-      halfH - 0.17,
-    );
-    // 胴体
-    add(
-      new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.66, 0.26), jersey),
-      0,
-      halfH - 0.67,
-    );
-    // 脚（2本）
-    const legGeo = new THREE.BoxGeometry(0.18, 0.7, 0.2);
-    add(new THREE.Mesh(legGeo, jersey), -0.12, -halfH + 0.35);
-    add(new THREE.Mesh(legGeo.clone(), jersey), 0.12, -halfH + 0.35);
-    // 腕（左右に水平に広げて構える。手は腕の先端に合わせる）
-    const armY = halfH - 0.5;
-    const armGeo = new THREE.BoxGeometry(0.5, 0.15, 0.15);
-    add(new THREE.Mesh(armGeo, jersey), -0.48, armY);
-    add(new THREE.Mesh(armGeo.clone(), jersey), 0.48, armY);
-    // 手（グローブ）：腕の先端と同じ高さに置く
-    const handGeo = new THREE.SphereGeometry(0.11, 12, 12);
-    add(new THREE.Mesh(handGeo, gloves), -0.76, armY);
-    add(new THREE.Mesh(handGeo.clone(), gloves), 0.76, armY);
-
-    return group;
+  /** 壁（人垣）：幅に応じた人数の選手を横一列に並べる。原点は箱の中心 */
+  private makeWallMesh(w: number, h: number): THREE.Group {
+    const wall = new THREE.Group();
+    const count = Math.max(1, Math.round(w / 0.6));
+    const spacing = w / count;
+    for (let i = 0; i < count; i++) {
+      const player = makePlayerMesh({ jersey: 0xf5f5f5, shorts: 0x1e3a8a, socks: 0x1e3a8a }, false);
+      player.scale.set(1, h / PLAYER_BASE_H, 1);
+      player.position.x = -w / 2 + spacing * (i + 0.5);
+      // わずかに前後・向きをばらつかせて人垣らしく
+      player.position.z = (Math.random() - 0.5) * 0.08;
+      player.rotation.y = (Math.random() - 0.5) * 0.15;
+      wall.add(player);
+    }
+    return wall;
   }
 
   /**
@@ -1166,14 +1040,10 @@ export class Game {
    * 待機中は中央へ戻って立ち直る。
    */
   private updateKeeper(mo: MovingObstacle, dt: number): void {
-    if (this.state.phase !== "shooting") {
+    if (this.state.phase !== 'shooting') {
       // 待機・結果表示中：状態をリセットし、中央へ戻って立ち上がる
       mo.diveDir = 0;
-      const back = THREE.MathUtils.clamp(
-        mo.baseX - mo.body.position.x,
-        -3 * dt,
-        3 * dt,
-      );
+      const back = THREE.MathUtils.clamp(mo.baseX - mo.body.position.x, -3 * dt, 3 * dt);
       this.applyKeeperPose(mo, mo.body.position.x + back);
       mo.mesh.rotation.z = THREE.MathUtils.damp(mo.mesh.rotation.z, 0, 6, dt);
       return;
@@ -1213,11 +1083,7 @@ export class Game {
     mo.mesh.position.x = cx;
   }
 
-  private makeTargetMesh(
-    target: TargetZone,
-    color = 0xff3355,
-    opacity = 0.35,
-  ): THREE.Mesh {
+  private makeTargetMesh(target: TargetZone, color = 0xff3355, opacity = 0.35): THREE.Mesh {
     const geo = new THREE.PlaneGeometry(target.w, target.h);
     const mat = new THREE.MeshBasicMaterial({
       color,
@@ -1249,6 +1115,7 @@ export class Game {
       this.world.removeBody(body);
     }
     this.obstacleBodies.clear();
+    this.wallBodies.clear();
     this.movingObstacles = [];
 
     if (this.targetMesh) {
@@ -1284,18 +1151,17 @@ export class Game {
   private bindInput(): void {
     const dom = this.renderer.domElement;
     // タッチ操作でスクロール・ズームが発生しないようにする
-    dom.style.touchAction = "none";
-    dom.addEventListener("pointerdown", this.onPointerDown);
-    dom.addEventListener("pointermove", this.onPointerMove);
-    dom.addEventListener("pointerup", this.onPointerUp);
-    dom.addEventListener("pointercancel", this.onPointerCancel);
+    dom.style.touchAction = 'none';
+    dom.addEventListener('pointerdown', this.onPointerDown);
+    dom.addEventListener('pointermove', this.onPointerMove);
+    dom.addEventListener('pointerup', this.onPointerUp);
+    dom.addEventListener('pointercancel', this.onPointerUp);
   }
 
   /** ドラッグ開始位置を記録する */
   private onPointerDown = (e: PointerEvent): void => {
     if (this.state.mode === null) return; // タイトル画面では無効
-    if (this.state.phase !== "aiming") return;
-    if (this.dragging) return;
+    if (this.state.phase !== 'aiming') return;
     this.dragging = true;
     this.dragStartX = e.clientX;
     this.dragStartY = e.clientY;
@@ -1307,7 +1173,7 @@ export class Game {
 
   /** ドラッグ量から方向・仰角・パワーを更新する（パチンコ式：引いた逆へ飛ぶ） */
   private onPointerMove = (e: PointerEvent): void => {
-    if (!this.dragging || this.state.phase !== "aiming") return;
+    if (!this.dragging || this.state.phase !== 'aiming') return;
     const rect = this.renderer.domElement.getBoundingClientRect();
     const maxDrag = Math.min(rect.width, rect.height) * 0.35;
     const dx = e.clientX - this.dragStartX;
@@ -1330,19 +1196,13 @@ export class Game {
     if (this.renderer.domElement.hasPointerCapture(e.pointerId)) {
       this.renderer.domElement.releasePointerCapture(e.pointerId);
     }
-    if (this.state.phase !== "aiming") return;
+    if (this.state.phase !== 'aiming') return;
     if (this.state.power < 0.08) {
       this.state.power = 0;
       this.emitState();
       return;
     }
     this.shoot();
-  };
-
-  private onPointerCancel = (): void => {
-    this.dragging = false;
-    this.state.power = 0;
-    this.emitState();
   };
 
   // ---------------------------------------------------------------------------
@@ -1354,8 +1214,18 @@ export class Game {
    * UI のカーブスライダーから呼ばれる。照準中のみ反映する。
    */
   setCurve(value: number): void {
-    if (this.state.phase !== "aiming") return;
+    if (this.state.phase !== 'aiming') return;
     this.state.curve = THREE.MathUtils.clamp(value, -1, 1);
+    this.emitState();
+  }
+
+  /** スキルボールを選ぶ（照準中のみ。クリア表示中は変更しない） */
+  setItem(id: ItemId): void {
+    if (this.state.mode === null || this.state.phase !== 'aiming' || this.state.stageCleared) return;
+    this.state.item = id;
+    // カーブ0のままでは曲がらないので、ブーメランを選んだら右巻きを初期設定する
+    if (id === 'boomerang' && Math.abs(this.state.curve) < 0.05) this.state.curve = 0.6;
+    this.applyItemLook();
     this.emitState();
   }
 
@@ -1365,70 +1235,19 @@ export class Game {
 
   setTrail(enabled: boolean): void {
     this.trailEnabled = enabled;
-    this.trailLine.visible = enabled && this.trailCount > 1;
+    this.trailLine.visible = enabled;
   }
 
-  setItem(id: ItemId): void {
-    if (
-      this.state.mode === null ||
-      this.state.phase !== "aiming" ||
-      this.state.stageCleared
-    )
-      return;
-    if (!["none", "banana", "rocket", "tiny"].includes(id)) return;
-    this.state.item = id;
-    if (id === "banana" && Math.abs(this.state.curve) < 0.01)
-      this.state.curve = 0.55;
-    this.applyItemShape();
-    this.updateAimArrow();
-    this.emitState();
-  }
-
-  private applyItemShape(): void {
-    const item = itemFor(this.state.item);
-    this.ballRadius = BALL_RADIUS * item.radius;
-    this.ballMesh.scale.setScalar(item.radius);
-    (this.ballMesh.material as THREE.MeshStandardMaterial).color.setHex(
-      item.tint,
-    );
-    const shape = this.ballBody.shapes[0] as CANNON.Sphere;
-    shape.radius = this.ballRadius;
-    shape.updateBoundingSphereRadius();
-    this.ballBody.updateBoundingRadius();
-    this.ballBody.updateMassProperties();
-    this.ballBody.aabbNeedsUpdate = true;
-    this.ballBody.position.y = this.ballRadius;
-    this.ballMesh.position.y = this.ballRadius;
-    (this.trailLine.material as THREE.LineBasicMaterial).color.setHex(
-      item.tint === 0xffffff ? 0xc6f36b : item.tint,
-    );
-    this.renderer.shadowMap.needsUpdate = true;
-  }
-
-  configureShot(aim: number, elevation: number, power: number): void {
-    if (
-      this.state.mode === null ||
-      this.state.phase !== "aiming" ||
-      this.state.stageCleared
-    )
-      return;
-    this.aimX = THREE.MathUtils.clamp(aim, -1, 1);
-    this.aimY = THREE.MathUtils.clamp(elevation, 0, 1);
-    this.state.power = THREE.MathUtils.clamp(power, 0.08, 1);
-    this.updateAimArrow();
-    this.emitState();
-  }
-
-  kickShot(): void {
-    if (
-      this.state.mode === null ||
-      this.state.phase !== "aiming" ||
-      this.state.stageCleared
-    )
-      return;
-    if (this.freeShotLimit > 0 && this.state.attempts >= this.freeShotLimit)
-      return;
-    this.shoot();
+  /** 選択中の球質を見た目に反映（キャノン=赤熱、ゴースト=半透明、照準矢印と弾道の色） */
+  private applyItemLook(): void {
+    const id = this.state.item;
+    const mat = this.ballMesh.material as THREE.MeshStandardMaterial;
+    mat.emissive.setHex(id === 'cannon' ? 0xff4d00 : 0x000000);
+    mat.emissiveIntensity = id === 'cannon' ? 0.45 : 0;
+    mat.transparent = id === 'ghost';
+    mat.opacity = id === 'ghost' ? 0.45 : 1;
+    this.aimArrow.setColor(id === 'normal' ? 0xffdd00 : skillBall(id).trail);
+    (this.trailLine.material as THREE.LineBasicMaterial).color.setHex(skillBall(id).trail);
   }
 
   /** 現在の照準から打ち出し方向の単位ベクトルを求める */
@@ -1449,19 +1268,39 @@ export class Game {
   }
 
   private shoot(): void {
-    this.trailCount = 0;
-    this.physicsAccumulator = 0;
-    this.trailLine.visible = false;
     const dir = this.aimDirection();
-    const item = itemFor(this.state.item);
-    const speed =
-      (MIN_SPEED + this.state.power * (MAX_SPEED - MIN_SPEED)) * item.speed;
+    const ball = skillBall(this.state.item);
+    const speed = (MIN_SPEED + this.state.power * (MAX_SPEED - MIN_SPEED)) * ball.speed;
     this.ballBody.velocity.set(dir.x * speed, dir.y * speed, dir.z * speed);
-    // カーブ量を縦軸のサイドスピンに変換（+転がり用の回転も少し）
-    const spin = -this.state.curve * MAX_CURVE_SPIN * item.spin;
-    this.ballBody.angularVelocity.set(-dir.z * 8, spin, dir.x * 8);
+    // カーブ量を縦軸のサイドスピンに変換（+転がり用の回転も少し）。
+    // ゴール方向(-Z)へ飛ぶ球は ω_y<0 でマグヌス力が +X（右）を向くため、正のカーブ=右曲がりになるよう符号を反転する
+    const spin = -this.state.curve * MAX_CURVE_SPIN * ball.curve;
+    if (ball.id === 'knuckle') {
+      // 無回転：スピン由来の曲がりは無く、代わりに空気の乱れで不規則にブレる
+      this.ballBody.angularVelocity.set(0, 0, 0);
+      this.knucklePhase = this.knucklePhase.map(() => Math.random() * Math.PI * 2);
+    } else if (ball.id === 'drive') {
+      // 進行方向に直交する水平軸まわりのトップスピン。ω×v が下向きになる向きにとる
+      const len = Math.hypot(dir.x, dir.z) || 1;
+      this.ballBody.angularVelocity.set(
+        (dir.z / len) * DRIVE_TOPSPIN,
+        spin,
+        (-dir.x / len) * DRIVE_TOPSPIN,
+      );
+    } else {
+      this.ballBody.angularVelocity.set(-dir.z * 8, spin, dir.x * 8);
+    }
+    // ゴーストは固定の壁だけ当たり判定を切る（キック後〜次のリセットまで）
+    this.ghostActive = ball.id === 'ghost';
+    for (const wall of this.wallBodies) wall.collisionResponse = !this.ghostActive;
+    if (ball.id !== 'normal') this.state.stageItemUsed = true;
+    this.state.shotKmh = Math.round(speed * 3.6);
+    this.flightTime = 0;
+    this.physicsAccumulator = 0;
+    this.clearTrail();
+    this.pushTrailPoint();
 
-    this.sfx.kick(this.state.power);
+    this.sfx.kick(Math.min(1, this.state.power * ball.speed));
 
     this.prevBallZ = this.ballBody.position.z;
     this.prevPostX = this.ballBody.position.x;
@@ -1471,21 +1310,21 @@ export class Game {
     this.shotHitPostL = false;
     this.shotHitPostR = false;
     this.aimArrow.visible = false;
-    this.setPhase("shooting");
+    this.setPhase('shooting');
   }
 
   private resetBall(): void {
-    this.applyItemShape();
-    this.physicsAccumulator = 0;
     // ネット接触で上げた減衰を通常値へ戻す
     this.ballBody.linearDamping = FLIGHT_LINEAR_DAMPING;
     this.ballBody.angularDamping = FLIGHT_ANGULAR_DAMPING;
     this.ballBody.velocity.setZero();
     this.ballBody.angularVelocity.setZero();
-    this.ballBody.position.set(0, this.ballRadius, 0);
+    this.ballBody.position.set(0, BALL_RADIUS, 0);
     this.ballBody.quaternion.set(0, 0, 0, 1);
-    this.ballMesh.position.set(0, this.ballRadius, 0);
+    this.ballMesh.position.set(0, BALL_RADIUS, 0);
     this.prevBallZ = 0;
+    this.ghostActive = false;
+    for (const wall of this.wallBodies) wall.collisionResponse = true;
   }
 
   /** ゴール面のターゲットゾーン内に (x, y) があるか */
@@ -1509,29 +1348,15 @@ export class Game {
     const bx = this.ballBody.position.x;
     const bz = this.ballBody.position.z;
     // ポストの高さ範囲外（上を越えた等）は対象外
-    if (by >= -this.ballRadius && by <= GOAL_HEIGHT + this.ballRadius) {
+    if (by >= -BALL_RADIUS && by <= GOAL_HEIGHT + BALL_RADIUS) {
       const halfW = GOAL_WIDTH / 2;
-      const r = POST_RADIUS + this.ballRadius + 0.01;
+      const r = POST_RADIUS + BALL_RADIUS + 0.03; // 接触とみなす中心間距離
       if (!this.shotHitPostL) {
-        const d = this.segPointDist2D(
-          this.prevPostX,
-          this.prevPostZ,
-          bx,
-          bz,
-          -halfW,
-          GOAL_Z,
-        );
+        const d = this.segPointDist2D(this.prevPostX, this.prevPostZ, bx, bz, -halfW, GOAL_Z);
         if (d < r) this.shotHitPostL = true;
       }
       if (!this.shotHitPostR) {
-        const d = this.segPointDist2D(
-          this.prevPostX,
-          this.prevPostZ,
-          bx,
-          bz,
-          halfW,
-          GOAL_Z,
-        );
+        const d = this.segPointDist2D(this.prevPostX, this.prevPostZ, bx, bz, halfW, GOAL_Z);
         if (d < r) this.shotHitPostR = true;
       }
     }
@@ -1562,13 +1387,8 @@ export class Game {
   private checkGoalCrossing(): void {
     const z = this.ballBody.position.z;
     if (this.prevBallZ > GOAL_Z && z <= GOAL_Z) {
-      const fraction = (this.prevBallZ - GOAL_Z) / (this.prevBallZ - z);
-      const x =
-        this.previousBall.x +
-        (this.ballBody.position.x - this.previousBall.x) * fraction;
-      const y =
-        this.previousBall.y +
-        (this.ballBody.position.y - this.previousBall.y) * fraction;
+      const x = this.ballBody.position.x;
+      const y = this.ballBody.position.y;
       const inside = Math.abs(x) < GOAL_WIDTH / 2 && y > 0 && y < GOAL_HEIGHT;
       // 枠内に入ったらネットを光らせて揺らし、観衆の歓声を鳴らす
       if (inside) {
@@ -1588,8 +1408,8 @@ export class Game {
 
   /** ショット終了。inside=枠内通過, inTarget=ターゲット通過, (x,y)=ゴール面通過点 */
   private finishShot(inside: boolean, inTarget: boolean, x = 0, y = 0): void {
-    if (this.state.phase !== "shooting") return;
-    if (this.state.mode === "stage") {
+    if (this.state.phase !== 'shooting') return;
+    if (this.state.mode === 'stage') {
       this.finishStageShot(inside, inTarget, x, y);
       return;
     }
@@ -1597,18 +1417,14 @@ export class Game {
     this.state.attempts += 1;
     const goal = inside;
     if (goal) this.state.score += 1;
-    this.state.lastResult = goal ? "goal" : "miss";
-    this.resultTimer = goal ? 0.75 : 0.55;
-    this.setPhase("result");
+    this.state.streak = goal ? this.state.streak + 1 : 0;
+    this.state.lastResult = goal ? 'goal' : 'miss';
+    this.resultTimer = goal ? 2.0 : 1.5;
+    this.setPhase('result');
   }
 
   /** ステージモードのショット評価。条件をすべて満たせばクリア */
-  private finishStageShot(
-    inside: boolean,
-    inTarget: boolean,
-    x = 0,
-    y = 0,
-  ): void {
+  private finishStageShot(inside: boolean, inTarget: boolean, x = 0, y = 0): void {
     const stage = this.stages[this.state.stageIndex];
     this.state.attempts += 1;
     this.state.stageAttempts += 1;
@@ -1638,10 +1454,10 @@ export class Game {
         this.state.allCleared = true;
       }
     } else {
-      this.state.lastResult = "miss";
-      this.resultTimer = 0.55;
+      this.state.lastResult = 'miss';
+      this.resultTimer = 1.5;
     }
-    this.setPhase("result");
+    this.setPhase('result');
   }
 
   /**
@@ -1659,16 +1475,16 @@ export class Game {
     // この1球が「カウントされた」か（成功フィードバック用）
     let counted = false;
 
-    if (goal.type === "quota" || goal.type === "combo") {
+    if (goal.type === 'quota' || goal.type === 'combo') {
       // 基本成功＝枠内通過（的指定があればその的も通すこと）
       const ok = inside && (stage.target ? inTarget : true);
       if (ok) {
         this.goalProgress += 1;
         counted = true;
-      } else if (goal.type === "combo") {
+      } else if (goal.type === 'combo') {
         this.goalProgress = 0; // 連続が途切れる
       }
-    } else if (goal.type === "bingo") {
+    } else if (goal.type === 'bingo') {
       if (inside) {
         this.goalZones.forEach((zone, i) => {
           if (!this.bingoHit[i] && this.inZone(x, y, zone)) {
@@ -1695,20 +1511,16 @@ export class Game {
 
     // 達成判定
     let cleared = false;
-    if (goal.type === "quota") cleared = this.goalProgress >= goal.need;
-    else if (goal.type === "combo") cleared = this.goalProgress >= goal.need;
-    else if (goal.type === "bingo") cleared = this.bingoHit.every(Boolean);
+    if (goal.type === 'quota') cleared = this.goalProgress >= goal.need;
+    else if (goal.type === 'combo') cleared = this.goalProgress >= goal.need;
+    else if (goal.type === 'bingo') cleared = this.bingoHit.every(Boolean);
     else cleared = this.goalProgress >= goal.need;
 
-    this.state.shotsLeft = Math.max(
-      0,
-      this.state.shotLimit - this.state.stageAttempts,
-    );
+    this.state.shotsLeft = Math.max(0, this.state.shotLimit - this.state.stageAttempts);
     this.updateProgressText();
 
     // 残り球で達成しきれない（数学的に不可能になった）かどうか
-    const impossible =
-      !cleared && this.minShotsNeeded(goal) > this.state.shotsLeft;
+    const impossible = !cleared && this.minShotsNeeded(goal) > this.state.shotsLeft;
 
     if (cleared) {
       this.state.lastResult = null;
@@ -1719,22 +1531,22 @@ export class Game {
       }
     } else if (impossible) {
       // 球切れ／達成不能 → ステージ最初からやり直し
-      this.state.lastResult = "fail";
+      this.state.lastResult = 'fail';
       this.stageFailPending = true;
       this.resultTimer = 2.0;
     } else {
-      this.state.lastResult = counted ? "goal" : "miss";
-      this.resultTimer = 0.65;
+      this.state.lastResult = counted ? 'goal' : 'miss';
+      this.resultTimer = 1.2;
     }
-    this.setPhase("result");
+    this.setPhase('result');
   }
 
   /** 残りミッションを達成するのに最低あと何球必要か（これが残り球を超えたら失敗確定） */
   private minShotsNeeded(goal: StageGoal): number {
-    if (goal.type === "quota" || goal.type === "combo") {
+    if (goal.type === 'quota' || goal.type === 'combo') {
       return Math.max(0, goal.need - this.goalProgress);
     }
-    if (goal.type === "bingo") {
+    if (goal.type === 'bingo') {
       return this.bingoHit.filter((h) => !h).length;
     }
     // score：1球で稼げる最高点で割って切り上げ
@@ -1764,56 +1576,14 @@ export class Game {
   // メインループ
   // ---------------------------------------------------------------------------
 
-  private applyBallForces(): void {
-    if (this.state.phase !== "shooting") return;
-    const item = itemFor(this.state.item);
-    const v = this.ballBody.velocity,
-      spin = this.ballBody.angularVelocity;
-    const x = v.x - this.windX,
-      y = v.y,
-      z = v.z - this.windZ;
-    const drag = -DRAG_K * item.drag * Math.hypot(x, y, z);
-    this.aeroForce.set(
-      drag * x + MAGNUS_COEF * (spin.y * z - spin.z * y),
-      drag * y + MAGNUS_COEF * (spin.z * x - spin.x * z),
-      drag * z + MAGNUS_COEF * (spin.x * y - spin.y * x),
-    );
-    if (this.ballBody.position.y < this.ballRadius + 0.02) {
-      const rolling = Math.hypot(v.x, v.z);
-      if (rolling > 0.1) {
-        const resistance = (ROLL_RESIST * BALL_MASS * 9.82) / rolling;
-        this.aeroForce.x -= resistance * v.x;
-        this.aeroForce.z -= resistance * v.z;
-      }
-    }
-    this.ballBody.applyForce(this.aeroForce);
-  }
-
-  private simulate(dt: number): void {
-    if (this.state.phase === "aiming") return;
-    const step = this.state.item === "rocket" ? 1 / 240 : 1 / 120;
-    this.physicsAccumulator += dt;
-    while (this.physicsAccumulator + 1e-9 >= step) {
-      this.previousBall.copy(this.ballBody.position);
-      this.applyBallForces();
-      this.world.step(step);
-      if (this.state.phase === "shooting") {
-        this.checkPostHits();
-        this.checkGoalCrossing();
-      }
-      this.physicsAccumulator = Math.max(0, this.physicsAccumulator - step);
-    }
-  }
-
   private animate = (): void => {
     this.animationId = requestAnimationFrame(this.animate);
-    const dt = Math.min(this.clock.getDelta(), 0.25);
-    if (document.hidden || (this.state.mode === null && !this.sceneDirty))
-      return;
+    // 低fpsでもゲーム内時間が遅くならないよう、上限を大きめにとって固定ステップで刻む
+    const dt = Math.min(this.clock.getDelta(), 0.1);
 
     // 動く障害物（キーパー）の更新
     for (const mo of this.movingObstacles) {
-      if (mo.kind === "track") {
+      if (mo.kind === 'track') {
         this.updateKeeper(mo, dt);
       } else {
         // 往復キーパー：sin で左右に振る
@@ -1824,41 +1594,20 @@ export class Game {
       }
     }
 
-    // Fixed substeps apply forces every step; low FPS no longer slows game time.
+    // 物理（固定サブステップ。毎ステップ空力を加え、ゴール面通過もステップごとに判定）
     this.simulate(dt);
-    if (this.state.phase !== "aiming" || this.movingObstacles.length > 0)
-      this.renderer.shadowMap.needsUpdate = true;
+    if (this.state.phase !== 'aiming' && this.trailEnabled && this.ballBody.position.z > GOAL_Z - 2) {
+      this.pushTrailPoint();
+    }
 
     // メッシュへ反映
-    this.ballMesh.position.copy(
-      this.ballBody.position as unknown as THREE.Vector3,
-    );
+    this.ballMesh.position.copy(this.ballBody.position as unknown as THREE.Vector3);
     this.ballMesh.quaternion.copy(
       this.ballBody.quaternion as unknown as THREE.Quaternion,
     );
-    if (this.state.phase === "shooting" && this.trailEnabled) {
-      const p = this.ballMesh.position;
-      const last = (this.trailCount - 1) * 3;
-      const dx = p.x - this.trailPositions[last],
-        dy = p.y - this.trailPositions[last + 1],
-        dz = p.z - this.trailPositions[last + 2];
-      if (!this.trailCount || dx * dx + dy * dy + dz * dz > 0.035) {
-        if (this.trailCount === 180) {
-          this.trailPositions.copyWithin(0, 3);
-          this.trailCount--;
-        }
-        const offset = this.trailCount++ * 3;
-        this.trailPositions[offset] = p.x;
-        this.trailPositions[offset + 1] = p.y;
-        this.trailPositions[offset + 2] = p.z;
-        this.trailLine.geometry.attributes.position.needsUpdate = true;
-        this.trailLine.geometry.setDrawRange(0, this.trailCount);
-        this.trailLine.visible = this.trailCount > 1;
-      }
-    }
 
     // カメラの視線：キック後はボールを緩やかに目で追い、次のキックで正面へ戻す
-    const track = this.state.mode !== null && this.state.phase !== "aiming";
+    const track = this.state.mode !== null && this.state.phase !== 'aiming';
     const lookX = track ? this.ballMesh.position.x : 0;
     const lookY = track ? this.ballMesh.position.y + 0.4 : 1;
     const lookZ = track ? this.ballMesh.position.z : GOAL_Z;
@@ -1867,7 +1616,7 @@ export class Game {
     this.camLook.z = THREE.MathUtils.damp(this.camLook.z, lookZ, 4, dt);
     this.camera.lookAt(this.camLook);
 
-    if (this.state.phase === "shooting") {
+    if (this.state.phase === 'shooting') {
       // 枠を大きく外れた／止まった／飛び続けた場合のショット終了判定
       this.shotTimer += dt;
       const v = this.ballBody.velocity.length();
@@ -1890,7 +1639,7 @@ export class Game {
       const intensity = Math.sin(k * Math.PI); // 中盤でピーク
       for (const mat of this.netMaterials) {
         mat.color.setRGB(1 - intensity * 0.8, 1, 1 - intensity * 0.6);
-        const base = (mat.userData.baseOpacity as number) ?? 0.45;
+        const base = (mat.userData.baseOpacity as number) ?? 0.75;
         mat.opacity = base + intensity * (1 - base) * 0.9;
       }
 
@@ -1923,7 +1672,7 @@ export class Game {
       if (this.netFlashTimer === 0) {
         for (const mat of this.netMaterials) {
           mat.color.setRGB(1, 1, 1);
-          mat.opacity = (mat.userData.baseOpacity as number) ?? 0.45;
+          mat.opacity = (mat.userData.baseOpacity as number) ?? 0.75;
         }
         (pos.array as Float32Array).set(this.netBackBasePos);
         pos.needsUpdate = true;
@@ -1931,15 +1680,7 @@ export class Game {
     }
 
     // 結果表示中（ステージクリア中は次操作までそのまま待機）
-    if (
-      this.state.phase === "result" &&
-      !this.state.stageCleared &&
-      !(
-        this.state.mode === "free" &&
-        this.freeShotLimit > 0 &&
-        this.state.attempts >= this.freeShotLimit
-      )
-    ) {
+    if (this.state.phase === 'result' && !this.state.stageCleared) {
       this.resultTimer -= dt;
       if (this.resultTimer <= 0) {
         if (this.stageFailPending) {
@@ -1953,20 +1694,78 @@ export class Game {
     }
 
     this.renderer.render(this.scene, this.camera);
-    this.sceneDirty = false;
   };
 
+  /** 実時間 dt ぶんの物理を固定サブステップで進める */
+  private simulate(dt: number): void {
+    this.physicsAccumulator += dt;
+    while (this.physicsAccumulator >= PHYS_STEP) {
+      this.physicsAccumulator -= PHYS_STEP;
+      if (this.state.phase === 'shooting') this.applyBallForces();
+      this.world.step(PHYS_STEP);
+      if (this.state.phase === 'shooting') {
+        this.flightTime += PHYS_STEP;
+        this.checkPostHits();
+        this.checkGoalCrossing();
+      }
+    }
+  }
+
+  /**
+   * 飛行中の空力：空気抵抗（二次抗力）とマグヌス力を対気速度（風を差し引いた速度）で計算し、
+   * ナックルなら不規則な揺れを加える。cannon-es はステップ後に力をクリアするので毎ステップ加える。
+   */
+  private applyBallForces(): void {
+    const ball = skillBall(this.state.item);
+    const v = this.ballBody.velocity;
+    const relX = v.x - this.windX;
+    const relY = v.y;
+    const relZ = v.z - this.windZ;
+    const relSpeed = Math.hypot(relX, relY, relZ);
+    const f = this.aeroForce.set(0, 0, 0);
+    if (relSpeed > 0.01) {
+      const fd = -DRAG_K * ball.drag * relSpeed;
+      const w = this.ballBody.angularVelocity;
+      let magnus = MAGNUS_COEF;
+      if (ball.id === 'boomerang') {
+        const k = Math.min(1, this.flightTime / BOOMERANG_RAMP_TIME);
+        magnus *= BOOMERANG_MAGNUS_MIN + (BOOMERANG_MAGNUS_MAX - BOOMERANG_MAGNUS_MIN) * k * k;
+      }
+      f.x = fd * relX + magnus * (w.y * relZ - w.z * relY);
+      f.y = fd * relY + magnus * (w.z * relX - w.x * relZ);
+      f.z = fd * relZ + magnus * (w.x * relY - w.y * relX);
+    }
+    // ナックル：2つの周波数を重ねた揺れ。空中で速いあいだだけ効き、失速・接地で消える
+    if (ball.id === 'knuckle' && this.ballBody.position.y > BALL_RADIUS + 0.05) {
+      const t = this.flightTime;
+      const p = this.knucklePhase;
+      const fade = Math.min(1, relSpeed / 18);
+      const ax = KNUCKLE_ACC_X * (0.6 * Math.sin(7.2 * t + p[0]) + 0.4 * Math.sin(12.5 * t + p[1]));
+      const ay = KNUCKLE_ACC_Y * (0.6 * Math.sin(8.4 * t + p[2]) + 0.4 * Math.sin(14.1 * t + p[3]));
+      f.x += BALL_MASS * ax * fade;
+      f.y += BALL_MASS * ay * fade;
+    }
+    // 芝の上を転がっている間は転がり抵抗で自然に減速させる
+    if (this.ballBody.position.y < BALL_RADIUS + 0.02) {
+      const rollSpeed = Math.hypot(v.x, v.z);
+      if (rollSpeed > 0.1) {
+        const fr = (ROLL_RESIST * BALL_MASS * 9.82) / rollSpeed;
+        f.x -= fr * v.x;
+        f.z -= fr * v.z;
+      }
+    }
+    this.ballBody.applyForce(f);
+  }
+
   private resetForNextShot(): void {
-    this.dragging = false;
-    this.trailCount = 0;
-    this.trailLine.visible = false;
     this.resetBall();
     this.state.power = 0;
     // カーブはスライダーの設定値を次のキックにも引き継ぐ
     this.state.lastResult = null;
     this.aimArrow.visible = true;
+    this.applyItemLook();
     this.updateAimArrow();
-    this.setPhase("aiming");
+    this.setPhase('aiming');
   }
 
   // ---------------------------------------------------------------------------
@@ -1974,65 +1773,11 @@ export class Game {
   // ---------------------------------------------------------------------------
 
   private onResize(): void {
-    this.sceneDirty = true;
     const w = this.container.clientWidth;
     const h = this.container.clientHeight;
-    if (!w || !h) return;
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
-    this.updateCameraFraming();
     this.renderer.setSize(w, h);
-  }
-
-  /** Keep the full-size pitch, shifting its framing only where the panel overlaps the ball. */
-  setControlsBounds(bounds: { left: number; right: number; top: number } | null): void {
-    this.controlsBounds = bounds;
-    this.updateCameraFraming();
-    this.sceneDirty = true;
-  }
-
-  private updateCameraFraming(): void {
-    const w = this.container.clientWidth;
-    const h = this.container.clientHeight;
-    if (!w || !h) return;
-    this.camera.clearViewOffset();
-    if (!this.controlsBounds) return;
-
-    // Frame the resting ball, not its moving position, so a shot never makes
-    // the projection jump. Keep the same FOV and apparent size of the goal.
-    const reference = this.camera.clone();
-    reference.lookAt(0, 1, GOAL_Z);
-    reference.updateMatrixWorld();
-    let left = w, right = 0, bottom = 0;
-    for (const x of [-BALL_RADIUS, BALL_RADIUS]) {
-      for (const y of [0, BALL_RADIUS * 2]) {
-        for (const z of [-BALL_RADIUS, BALL_RADIUS]) {
-          const point = new THREE.Vector3(x, y, z).project(reference);
-          const px = (point.x + 1) * w / 2;
-          left = Math.min(left, px);
-          right = Math.max(right, px);
-          bottom = Math.max(bottom, (1 - point.y) * h / 2);
-        }
-      }
-    }
-    const panel = this.controlsBounds;
-    let offsetX = 0, offsetY = 0;
-    if (panel.left > w / 2) {
-      let goalRight = 0, goalBottom = 0;
-      for (const x of [-GOAL_WIDTH / 2, GOAL_WIDTH / 2]) {
-        for (const y of [0, GOAL_HEIGHT]) {
-          const point = new THREE.Vector3(x, y, GOAL_Z).project(reference);
-          goalRight = Math.max(goalRight, (point.x + 1) * w / 2);
-          goalBottom = Math.max(goalBottom, (1 - point.y) * h / 2);
-        }
-      }
-      if (goalBottom + 16 > panel.top)
-        offsetX = Math.max(0, goalRight + 16 - panel.left);
-    }
-    if (right - offsetX + 16 > panel.left && left - offsetX - 16 < panel.right) {
-      offsetY = Math.max(0, bottom - panel.top + 28);
-    }
-    if (offsetX || offsetY) this.camera.setViewOffset(w, h, offsetX, offsetY, w, h);
   }
 
   /** クリーンアップ。React の useEffect の戻り値で呼ぶ。 */
@@ -2040,37 +1785,12 @@ export class Game {
     cancelAnimationFrame(this.animationId);
     this.resizeObserver.disconnect();
     this.clearStageObjects();
-    this.sfx.dispose();
-    this.trailLine.geometry.dispose();
-    (this.trailLine.material as THREE.Material).dispose();
-    const geometries = new Set<THREE.BufferGeometry>();
-    const materials = new Set<THREE.Material>();
-    const textures = new Set<THREE.Texture>();
-    this.scene.traverse((object) => {
-      if (!(
-        object instanceof THREE.Mesh ||
-        object instanceof THREE.Line ||
-        object instanceof THREE.Sprite
-      ))
-        return;
-      if ("geometry" in object) geometries.add(object.geometry);
-      for (const material of Array.isArray(object.material)
-        ? object.material
-        : [object.material]) {
-        materials.add(material);
-        for (const value of Object.values(material))
-          if (value instanceof THREE.Texture) textures.add(value);
-      }
-    });
-    textures.forEach((texture) => texture.dispose());
-    materials.forEach((material) => material.dispose());
-    geometries.forEach((geometry) => geometry.dispose());
-    this.ballBody.removeEventListener("collide", this.onBallCollide);
+    this.ballBody.removeEventListener('collide', this.onBallCollide);
     const dom = this.renderer.domElement;
-    dom.removeEventListener("pointerdown", this.onPointerDown);
-    dom.removeEventListener("pointermove", this.onPointerMove);
-    dom.removeEventListener("pointerup", this.onPointerUp);
-    dom.removeEventListener("pointercancel", this.onPointerCancel);
+    dom.removeEventListener('pointerdown', this.onPointerDown);
+    dom.removeEventListener('pointermove', this.onPointerMove);
+    dom.removeEventListener('pointerup', this.onPointerUp);
+    dom.removeEventListener('pointercancel', this.onPointerUp);
     this.renderer.dispose();
     if (dom.parentElement) dom.parentElement.removeChild(dom);
   }

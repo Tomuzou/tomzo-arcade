@@ -1,16 +1,17 @@
-import type { ItemId } from "../game/items";
-
 /** ゲームのフェーズ */
-export type GamePhase = "aiming" | "shooting" | "result";
+export type GamePhase = 'aiming' | 'shooting' | 'result';
 
 /** ゲームモード（null=タイトル画面） */
-export type GameMode = "free" | "stage";
+export type GameMode = 'free' | 'stage';
 
 /** ステージセット（'a'=α / 'b'=β / 'c'=γ / 'd'=δ） */
-export type StageSet = "a" | "b" | "c" | "d";
+export type StageSet = 'a' | 'b' | 'c' | 'd';
+
+/** スキルボール（キック前に選ぶ球質。定義は game/items.ts） */
+export type ItemId = 'normal' | 'knuckle' | 'drive' | 'cannon' | 'ghost' | 'boomerang';
 
 /** シュート結果（'fail'=制限球を使い切ってステージ失敗） */
-export type ShotResult = "goal" | "miss" | "fail" | null;
+export type ShotResult = 'goal' | 'miss' | 'fail' | null;
 
 /** GameクラスからReact側へ状態変化を通知するためのコールバック */
 export interface GameCallbacks {
@@ -41,10 +42,10 @@ export interface ScoreZone extends TargetZone {
  * - score: zones の得点を合計 need 点ぶん稼ぐ（同時に複数ヒットなら最高点を採用）
  */
 export type StageGoal =
-  | { type: "quota"; need: number }
-  | { type: "combo"; need: number }
-  | { type: "bingo"; zones: TargetZone[] }
-  | { type: "score"; need: number; zones: ScoreZone[] };
+  | { type: 'quota'; need: number }
+  | { type: 'combo'; need: number }
+  | { type: 'bingo'; zones: TargetZone[] }
+  | { type: 'score'; need: number; zones: ScoreZone[] };
 
 /** ステージ内の障害物（直方体）。move付きは往復、track付きはボールを追跡する。 */
 export interface ObstacleDef {
@@ -56,7 +57,7 @@ export interface ObstacleDef {
   d: number; // 奥行き
   /** 一定パターンで左右に往復する障害物（キーパー）の設定 */
   move?: {
-    axis: "x";
+    axis: 'x';
     range: number; // 中心からの片振り幅
     speed: number; // 往復の速さ（rad/s 相当）
   };
@@ -84,7 +85,7 @@ export interface StageDefinition {
   hitPostR?: boolean;
   /** 通過すべきターゲットゾーン */
   target?: TargetZone;
-  /** ボールを物理的に弾く障害物。接触自体では失敗にならない。 */
+  /** 触れたら失敗する障害物 */
   obstacles?: ObstacleDef[];
   // --- γ（球数制限チャレンジ）用 ---
   /** 制限球数。これを使い切ってもミッション未達ならステージ最初からやり直し */
@@ -101,7 +102,6 @@ export interface StageDefinition {
 
 /** UIに表示するゲーム状態 */
 export interface GameState {
-  item: ItemId;
   /** 現在のモード（null=タイトル画面） */
   mode: GameMode | null;
   phase: GamePhase;
@@ -138,4 +138,13 @@ export interface GameState {
   /** 現在ステージの風速（m/s）。0なら無風。HUDの風向き表示に使う */
   windX: number;
   windZ: number;
+  // --- ver.4.0.c で追加 ---
+  /** 選択中のスキルボール */
+  item: ItemId;
+  /** 直前のキックの球速（km/h）。0なら未キック */
+  shotKmh: number;
+  /** フリープレイの現在の連続ゴール数 */
+  streak: number;
+  /** 現在のステージ挑戦中に一度でもスキルボールを使ったか（使わずにクリアで👑） */
+  stageItemUsed: boolean;
 }

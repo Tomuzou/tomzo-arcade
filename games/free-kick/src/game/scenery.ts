@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { VERSION } from '../version';
 
 /**
- * ver.c.4 のリアル寄りの見た目を作る生成関数群（テクスチャはすべてその場で Canvas 描画する）。
+ * ver.4.x.c のリアル寄りの見た目を作る生成関数群（テクスチャはすべてその場で Canvas 描画する）。
  * 物理の当たり判定には関与しない。
  */
 

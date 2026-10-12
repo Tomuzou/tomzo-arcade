@@ -54,5 +54,5 @@ npm run play:desktop       # 本番ビルドして専用ウィンドウでハブ
 
 ## 旧リポジトリ
 
-- `Tomuzou/soccer-app` は FREE KICK LAB の開発元。開発履歴はそちらに残っている。ver.c.4 のソースは `claude-c4` ブランチから `games/free-kick/c4/` へ移した
+- `Tomuzou/soccer-app` は FREE KICK LAB の開発元。移行前の開発履歴はそちらに残っている。ver.4.0.c（旧 ver.c.4）のソースは `claude-c4` ブランチから移し、今の最新版 ver.4.1.c の `src/` になっている
 - 旧URL `/soccer-app/…` は、soccer-app 側の GitHub Pages から `/tomzo-arcade/free-kick/…` へ転送する

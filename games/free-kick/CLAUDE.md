@@ -1,17 +1,39 @@
-# FREE KICK LAB（Soccer Free Kick 3D）— CLAUDE.md
+# FREE KICK 3D（FREE KICK LAB）— CLAUDE.md
 
 > このゲームは **TOMZO ARCADE** の `games/free-kick/`（公開URL `/tomzo-arcade/free-kick/`）。アーケード共通のルール（構成・ビルド・公開・ゲームの追加）はリポジトリ直下の `CLAUDE.md`。
-> 旧リポジトリ `Tomuzou/soccer-app` から移行した。`public/` の凍結ビルドは移行時に、中の `/soccer-app/` を `/tomzo-arcade/free-kick/` へ文字列置換しただけで、それ以外は当時のまま。開発履歴は旧リポジトリに残っている。
+> 旧リポジトリ `Tomuzou/soccer-app` から移行した。それ以前の開発履歴はそちらに残っている。
 
 共通仕様はこのファイルで管理する。Codex 用の `AGENTS.md` はこのファイルを読むための入口。
 
 ブラウザで動作する3Dフリーキックゲーム。Three.js で3Dシーンを描画し、Cannon-es で物理シミュレーションを行う。
 
-## 現行リリース：ver.g.1（Codex 版）
+## バージョン
 
-- 現行UIは濃紺・ミント色のロビー、40ステージ選択、HUD、ドラッグ／精密照準、操作ガイド、10球ラッシュ、アイテム。
-- ユーザー指定により、ver.g.1 は版番号を上げずに継続改良する（`/tomzo-arcade/free-kick/` と `/tomzo-arcade/free-kick/ver.g.1/` の両方を ver.g.1 として更新）。
-- Claude Code 版（ver.c.1〜4）は凍結済みアーカイブ。詳細は「デプロイ／バージョンアーカイブ」。
+版名は `ver.<大>.<小>.<作者>`（作者 c = Claude Code、g = Codex）。
+
+| URL（`/tomzo-arcade/free-kick/` 以下） | 版 | 中身 |
+|---|---|---|
+| `/` | **ver.4.1.c（最新・開発中）** | `src/` をビルド。ver.4.0.c から継続改良 |
+| `ver.4.0.c/` | Claude 版・スキルボール | 凍結（ソースは git 履歴：コミット 5d8208d の `c4/`） |
+| `ver.3.1.g/` | Codex 版・10球ラッシュ・星評価 | 凍結（ソースは git 履歴：コミット 5d8208d の `src/`、保存キー `free-kick-lab.g1`） |
+| `ver.3.0.c/` | リアル物理・風（旧 ver.c.3、soccer-app 5d2df35） | 凍結。ソースなし |
+| `ver.2.0.c/` | 球数制限まで（旧 ver.c.2 / v2、74785ea） | 凍結。ソースなし |
+| `ver.1.0.c/` | 初期版（旧 ver.c.1 / v1、2cd2cbe） | 凍結。ソースなし |
+
+- 凍結版は `public/ver.*/`（`index.html` と `assets/`）に置き、vite が `dist/` 直下へそのままコピーする。**中身を書き換えない**
+- 旧名（`v1` `v2` `ver.c.1〜4` `ver.g.1` と入れ子の `v2/v1` `ver.c.3/v1` `ver.c.3/v2`）は `vite.config.ts` の `LEGACY_REDIRECTS` がビルド時に転送ページを出す。soccer-app の転送やブックマークが旧名を指しているので消さない
+- 版名は `src/version.ts` の `VERSION`（タイトル画面・スタジアムの広告ボード）と `index.html` の `<title>` に書く
+- 他版へのリンクは `App.tsx` の `ARCHIVES`。`ROOT`（`BASE_URL` から末尾の `ver.*/` を除いたもの）を基準にするので、凍結版として別の base でビルドしてもリンクは壊れない。自分自身は一覧から除き、凍結版として開かれたときだけ「最新版」を出す
+- ハブへ戻るリンクはタイトル画面左上の `← ARCADE`（`hubUrl(ROOT)`、開発サーバーでは出ない）
+
+### 今の最新版を凍結して次の版へ進むとき（例：ver.4.1.c を凍結して ver.4.2.c へ）
+
+1. `src/version.ts` と `index.html` の版名はそのまま（ver.4.1.c）で、凍結用にビルド：
+   `MSYS_NO_PATHCONV=1 npx vite build --base=/tomzo-arcade/free-kick/ver.4.1.c/ --outDir <作業用フォルダ>`（Git Bash では `MSYS_NO_PATHCONV` が必要）
+2. 出力の `index.html` と `assets/` だけを `public/ver.4.1.c/` へコピー（出力には `public/` の既存の版も入るのでそれはコピーしない）
+3. `App.tsx` の `ARCHIVES`、`scripts/verify-archives.mjs`、`tests/browser/archives.spec.ts`、ハブの `hub/src/games.ts` に ver.4.1.c を足す
+4. `version.ts` と `index.html` を次の版名にする
+5. `npm run build && npm run verify && npm run verify:archives -w @tomzo-arcade/free-kick`
 
 ## 技術スタック
 
@@ -26,25 +48,22 @@
 ```
 src/
   game/
-    Game.ts      # ゲーム本体（Three.js 描画 + Cannon-es 物理 + 入力 + モード/ステージ制御 + カメラ補正）
+    Game.ts      # ゲーム本体（Three.js 描画 + Cannon-es 物理 + 入力 + モード/ステージ制御）
+    scenery.ts   # 見た目（空・照明・芝・ボール・ゴール・スタンド・広告ボード・選手）の生成
     stages.ts    # ステージ定義（α=STAGES_A / β=STAGES_B / γ=STAGES_C / δ=STAGES_D、各10ステージ）
-    items.ts     # ショット前に選ぶアイテム定義（速度・スピン・半径・空気抵抗の倍率と色）
-    progress.ts  # 保存データの検証、クリア最少回数、星評価（保存キー free-kick-lab.g1）
-    surfaces.ts  # 32パネル球と芝のテクスチャ生成
+    items.ts     # スキルボールの定義
+    records.ts   # 保存データの読み書き（保存キー free-kick-3d.c4）
     sfx.ts       # 効果音（WebAudio 合成。音源ファイル不使用）
   types/index.ts # GameState / GamePhase / StageDefinition / StageSet などの型
-  App.tsx        # FREE KICK LAB UI（ロビー、ステージ選択、HUD、ラッシュ結果、精密照準、ガイド、記録保存）
+  version.ts     # 画面に出す版名
+  App.tsx        # UI（タイトル、ステージ選択、HUD、スキルバー、クリア画面、バージョンコレクション）
   App.css / index.css / main.tsx
 tests/
-  progress.test.mjs        # 記録検証（npm test）
-  browser/*.spec.ts        # 実ブラウザ確認：game / items / visibility / archives（npm run test:browser）
+  records.test.mjs          # 保存データ（npm test、CI でも実行）
+  browser/archives.spec.ts  # 全バージョンの表示・相互リンク・旧名の転送（npm run test:browser、要 ARCHIVE_CHECK）
 scripts/
-  archives.mjs             # 旧版HTMLのタイトル・戻りバナー付与、リダイレクトスタブ生成、--snapshot-g1 で ver.g.1 更新
-  verify-archives.mjs      # ビルド後 dist の全版のアセット・リダイレクト検証
-  build-c4.mjs             # c4/ をビルドして public/ver.c.4/ を置き換える（npm run build:c4）
-c4/                        # ver.c.4 のソース（独立した Vite ルート。仕様は c4/CLAUDE.md）
-public/                    # 凍結アーカイブ（下記）。vite が dist/ 直下へそのままコピーする
-（リポジトリ直下の .github/workflows/deploy.yml が main push でアーケード全体をビルド・検証して公開）
+  verify-archives.mjs       # ビルド後 dist に全版と旧名の転送ページが揃っているか
+public/ver.*/               # 凍結した過去版（上記）
 ```
 
 ## 開発コマンド
@@ -52,49 +71,54 @@ public/                    # 凍結アーカイブ（下記）。vite が dist/ 
 ```bash
 npm run dev              # 開発サーバー（localhost:5173）
 npm run build            # 本番ビルド（tsc 型チェック → vite build）
-npm test                 # 保存データ検証のユニットテスト
-npm run test:browser     # Playwright（ローカルはインストール済み Chrome、dev サーバーを自動起動）
-npm run verify:archives  # build 後に全版のアセット・リンクを検証
-npm run dev:c4           # ver.c.4 の開発サーバー
-npm run build:c4         # ver.c.4 をソースからビルドし public/ver.c.4/ を置き換え
-# 専用ウィンドウ起動はリポジトリ直下：npm run play:desktop -- --page=free-kick/ （ver.c.4 は --page=free-kick/ver.c.4/）
+npm test                 # 保存データのユニットテスト
+npm run verify:archives  # build 後に全版・旧名転送を検証
+npm run build && ARCHIVE_CHECK=1 npm run test:browser   # 本番ビルドを preview して全版をブラウザで確認
+# 専用ウィンドウ起動はリポジトリ直下：npm run play:desktop -- --page=free-kick/ （過去版は --page=free-kick/ver.4.0.c/ など）
 ```
 
 - lint スクリプトは未導入（`npm run build` の tsc が型チェックを兼ねる）
-- `.desktop/`（ローカル起動のプロファイル・ログ）と `test-results/` は git 管理外
+- `test-results/` は git 管理外
 
 ## 設計方針
 
 - Three.js のシーン管理はカスタムクラス（`Game`）で行い、React のレンダリングと分離する。UI オーバーレイは React 側
-- 入力は役割を分離：キャンバスのドラッグ＝コース＋パワー、カーブは専用スライダー（`Game.setCurve`）。精密照準は `configureShot(aim, elevation, power)` → `kickShot()`
-- 音と弾道表示は `setMuted` / `setTrail`。効果音は `sfx.ts` の `Sfx` クラス。AudioContext は初回キックで遅延生成。衝突音は `getImpactVelocityAlongNormal` の強度で音量・省略を決める
+- 入力は役割を分離：キャンバスのドラッグ＝コース＋パワー、カーブは専用スライダー（`Game.setCurve`）
+- 音と弾道表示は `setMuted` / `setTrail`。AudioContext は初回キックで遅延生成。衝突音は `getImpactVelocityAlongNormal` の強度で音量・省略を決める
 - カメラは注視点（`camLook`）を damp で動かし、キック後はボールを追い、次のキックで正面へ戻す
-- **画面レイアウト**：ピッチのキャンバスは常に画面全体。操作パネルは PC・横画面で右下、幅599px以下は下部にコンパクト表示。`setControlsBounds` で実際のパネル位置を渡し、静止ボール・ゴールに重なる場合だけ `camera.setViewOffset` で表示位置をずらす。パネル用にキャンバスを縮めたり、画角を広げてピッチを小さくしたりしない
-- **描画負荷**：描画 DPR は1.5まで、影は1024px、静止ロビーは再描画を省く（`sceneDirty`）、弾道は固定バッファを再利用
+- 描画は DPR 最大2、太陽光の影 2048px（`Game.ts` のコンストラクタ）
+- **キー操作**：←→ カーブ / 1-6 球質 / R 蹴り直し / M 音 / T 弾道 / Esc 戻る
+
+### 見た目（`src/game/scenery.ts`）
+
+ACES トーンマッピング＋sRGB テクスチャ、空ドーム（シェーダー）と半球光・太陽光（影はプレー範囲に絞る）、10m タイルの刈り込み芝、32パネル（五角形12・六角形20）を球面で塗り分けたボール＋縫い目バンプ＋クリアコート、細目ネット、金属ポスト、観客入りの段々スタンド3面・屋根・照明塔・発光広告ボード、壁は選手の列・キーパーは人型（当たり判定は箱のまま）。テクスチャはすべてその場で Canvas 描画する
 
 ### 物理モデル（実測値ベース）
 
-- **固定サブステップ**：120Hz（ロケット時240Hz）で毎ステップ空力を適用（`simulate`）。低fpsでも実時間で進行し、ゴール面通過点は前ステップとの補間で判定（`checkGoalCrossing`）
-- **空気抵抗**：二次抗力 `F = -DRAG_K・drag倍率・|v_rel|・v_rel`。`v_rel` は風を差し引いた対気速度。係数は実球の断面積（0.11m）と `DRAG_COEF`=0.22 から算出。`linearDamping` はほぼ0（`FLIGHT_LINEAR_DAMPING`）
-- **マグヌス力**：`F = MAGNUS_COEF・(ω × v_rel)`。実際のFKの曲がり幅（〜2.5m）に合わせた係数。スピンはほぼ減衰させない（`FLIGHT_ANGULAR_DAMPING`=0.08）。カーブの正値は右へ曲がるよう符号を合わせる
+- **固定サブステップ**：`simulate` で 1/120 秒。毎ステップ `applyBallForces`（抗力・マグヌス・ナックル・転がり）→ `world.step` → ポスト／ゴール面判定（`checkGoalCrossing`）
+- **空気抵抗**：二次抗力 `F = -DRAG_K・|v_rel|・v_rel`。`v_rel` は風を差し引いた対気速度。係数は実球の断面積（0.11m）と `DRAG_COEF`=0.22 から算出。`linearDamping` はほぼ0（`FLIGHT_LINEAR_DAMPING`）
+- **マグヌス力**：`F = MAGNUS_COEF・(ω × v_rel)`。実際のFKの曲がり幅（〜2.5m）に合わせた係数。スピンはほぼ減衰させない（`FLIGHT_ANGULAR_DAMPING`=0.08）
+- **カーブの符号**：正のカーブが右へ曲がるよう、`shoot` でスピンの符号を反転している（ver.3.0.c では左だった）
 - **風**（δ）：`StageDefinition.wind` が対気速度に入り、抗力・マグヌス両方に効く。空力は `phase==='shooting'` 中のみ
 - **バウンド・転がり**：ボール×芝 restitution 0.65 / friction 0.4、`ROLL_RESIST`、ポストは金属反発 0.8、壁・キーパーは 0.45
-- 通常球は半径0.11m・質量0.43kg。ゴールは実寸 7.32×2.44m、キック距離約18m
+- ボールは半径0.11m・質量0.43kg。ゴールは実寸 7.32×2.44m、キック距離約18m
 - 調整ノブ：曲がり＝`MAGNUS_COEF`/`MAX_CURVE_SPIN`、飛距離感＝`DRAG_COEF`、風の効き＝ステージ側の風速値
 
-### アイテム（`src/game/items.ts`）
+### スキルボール（`src/game/items.ts`、`Game.setItem`）
 
-- シュート前に1つ選ぶ（`Game.setItem`）。飛行中・クリア中は変更不可。効果は次のキックにも保持し、モード開始時はノーマルに戻す
-- ノーマル／🍌バナナ職人（スピン4倍。カーブ0なら右カーブ0.55をセット）／🚀ロケットスパイク（初速2.3倍・抗力0.65倍）／🫛豆つぶボール（直径・衝突半径半分・抗力0.65倍）
-- サイズ変更は `applyItemShape` で描画（scale）と Cannon Sphere の半径を同時に更新する
+倍率ではなく球質を変える。照準中のみ選択可、モード開始・メニュー復帰でノーマルに戻る。
+
+- 🌀ナックル：無回転（カーブ無効）＋2周波の揺れ加速度（`KNUCKLE_ACC_X/Y`、ショットごとにランダム位相、速度と高さでフェード）
+- ⤵️ドライブ：進行方向に直交する水平軸のトップスピン（`DRIVE_TOPSPIN`）でマグヌス力を下向きに
+- 🔥キャノン：初速1.45倍・抗力0.75倍・カーブ0.35倍
+- 🪃ブーメラン：カーブ3.2倍。マグヌス力を飛行0.6秒かけて0.25→1.5倍へ強め（`BOOMERANG_*`）、序盤はまっすぐ・後半に急激に曲がる。カーブ0で選ぶと0.6を初期設定
+- 👻ゴースト：固定の壁（`wallBodies`＝move/track なしの障害物）だけ `collisionResponse=false`。`resetBall` で戻す
 
 ## ゲームモード／ステージ
 
 - モードは `GameState.mode`（`null`=タイトル / `'free'` / `'stage'`）で管理し、`App.tsx` が画面を出し分ける
 - 遷移は `Game` の公開メソッド：`startFreePlay()` / `startStage(set, index)` / `nextStage()` / `retryShot()` / `returnToMenu()`
-- **10球ラッシュ**：`startFreePlay(10)`。Game 側が10球終了後のリセット・追加キックを止め、App 側が結果画面を表示する。通常のフリープレイは `startFreePlay()`
-- ステージは4セット：α / β / γ / δ（`GameState.stageSet` = `'a'`〜`'d'`）。定義は `stages.ts` にデータとして持つ
-- 全40ステージを最初から選択可能。無制限リトライ
+- ステージは4セット：α / β / γ / δ（`GameState.stageSet` = `'a'`〜`'d'`）。定義は `stages.ts` にデータとして持つ。全40ステージを最初から選択可能、無制限リトライ
 - ミッション条件は `StageDefinition` のフラグ：`requireGoal`（枠内）/ `hitBar` / `hitPostL`・`hitPostR` / `target`（的・サイドネットのゾーン通過）/ `obstacles`
 - 障害物：固定壁 / `move`（sin 往復キーパー）/ `track`（ボールのXを追うAIキーパー、`track.speed` で難度）。**物理的に弾くだけで接触自体は失敗にしない**（当たって入ってもゴール）
 - 障害物・的ゾーンは `buildStageObjects` で生成、`clearStageObjects` で破棄
@@ -121,35 +145,13 @@ npm run build:c4         # ver.c.4 をソースからビルドし public/ver.c.4
 - HUD 表示は `GameState.windX/windZ` と `App.tsx` の `windLabel`
 - γ のメカニクスと直交しており併用可（δ7=ビンゴ＋風、δ9=スコア＋向かい風）
 
-## 記録の保存（`src/game/progress.ts`）
+## 記録の保存（`src/game/records.ts`）
 
-- 保存キー `free-kick-lab.g1`（localStorage）。`parseProgress` が壊れた／不正な値を捨てて初期値にフォールバックする。保存できない環境でもゲームを継続する
-- 保存内容：ステージごとのクリア最少回数、ラッシュ自己ベスト、ミュート、弾道表示。ステージの途中進捗は保存しない
-- 星評価（`starsFor`）：1回クリア=★3、3回以内=★2、それ以外=★1
+- 保存キー `free-kick-3d.c4`（localStorage）。ver.4.0.c と共有しているので**キーを変えない**（変えると今までの記録が消える）
+- 保存内容：ステージごとの最少球数と👑（スキルボールを一度も使わずにクリア＝`GameState.stageItemUsed` が false）、フリープレイの最高連続ゴール、ミュート・弾道表示。ステージの途中進捗は保存しない
+- `loadRecords` は壊れた／不正な値を捨てて初期値にフォールバックし、保存できない環境でもゲームを継続する
 
-## デプロイ／バージョンアーカイブ
+## デプロイ
 
 - main への push で、リポジトリ直下の GitHub Actions がアーケード全体の `npm test` → `npm run build` → `npm run verify` と、このゲームの `verify:archives` を行い GitHub Pages へ公開（ブラウザテストは CI では回さない）
 - 本番 base は `vite.config.ts` で `/tomzo-arcade/free-kick/`（dev は `/`）。GitHub Pages は SPA フォールバックしない
-- `public/` 配下は vite が `dist/` 直下へそのままコピーするので、凍結済みの過去版が毎回一緒に配信される
-
-| URL（`/tomzo-arcade/free-kick/` 以下） | 中身 | 扱い |
-|---|---|---|
-| `/` | 現行 ver.g.1（ソースからビルド） | 改良を続ける |
-| `ver.g.1/` | 現行と同じ ver.g.1 のスナップショット | 改良のたびに更新 |
-| `ver.c.4/` | Claude 版の改良版。ソースは `c4/`（ver.c.3 から分岐） | 凍結ビルドを配信。直したときだけ `npm run build:c4` で置き換え |
-| `ver.c.3/` | 改良前の Claude 版 HEAD（5d2df35） | **凍結・上書き禁止** |
-| `ver.c.2/` ・ `v2/` | 旧v2（74785ea、球数制限まで） | 凍結。ver.c.2 の HTML は v2 のアセットを参照 |
-| `ver.c.1/` ・ `v1/` | 旧v1（2cd2cbe、初期版） | 凍結。ver.c.1 の HTML は v1 のアセットを参照 |
-
-- **ver.g.1 スナップショットの更新手順**（index とアセットのみをコピーし、既存アーカイブを再帰的に複製しない。古い js/css は自動削除）：
-  ```bash
-  MSYS_NO_PATHCONV=1 npm run build -- --base=/tomzo-arcade/free-kick/ver.g.1/   # Git Bash では MSYS_NO_PATHCONV が必要
-  node scripts/archives.mjs --snapshot-g1
-  npm run build
-  npm run verify:archives
-  ```
-- **相互リンク**：現行版は `App.tsx` のロビーから `BASE_URL + 'ver.c.N/'`（N=1〜4）へ。ver.c.1〜3 は `scripts/archives.mjs` が HTML に埋め込むバナーで `/tomzo-arcade/free-kick/` へ戻る。ver.c.4 はバナーを付けず、自前のタイトル画面のコレクション（公開ルート基準の絶対リンク）で各版へ移動する
-- **ver.c.4 の更新**：ソースは `c4/`（仕様は `c4/CLAUDE.md`）。`npm run build:c4` が型チェック・ビルドし、`public/ver.c.4/` の `index.html` と `assets/` を置き換える。開発サーバーは `npm run dev:c4`
-- **入れ子リンクのリダイレクト**：凍結バンドル内に残る相対リンク（例：ver.c.3 内の `BASE_URL + 'v1/'` → `/tomzo-arcade/free-kick/ver.c.3/v1/`）は、`<meta http-equiv="refresh">` のスタブでトップレベルへ転送する（`ver.c.3/v1`・`ver.c.3/v2`・`v2/v1`・`ver.g.1/ver.c.1〜4`）。`verify-archives.mjs` は `v2/v1` 以外を検証する
-- 新しい版を凍結する場合は新規ディレクトリを追加し、既存の凍結版は維持する

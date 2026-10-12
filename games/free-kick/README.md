@@ -1,60 +1,58 @@
-# FREE KICK LAB — ver.g.1
+# FREE KICK 3D — ver.4.1.c
 
-> TOMZO ARCADE の1タイトルです。[アーケードのトップ](https://tomuzou.github.io/tomzo-arcade/) から他のゲームも遊べます。開発履歴は旧リポジトリ [Tomuzou/soccer-app](https://github.com/Tomuzou/soccer-app) にあります。
+> TOMZO ARCADE の1タイトルです。[アーケードのトップ](https://tomuzou.github.io/tomzo-arcade/) から他のゲームも遊べます。移行前の開発履歴は旧リポジトリ [Tomuzou/soccer-app](https://github.com/Tomuzou/soccer-app) にあります。
 
 ブラウザで遊べる3Dフリーキックゲーム。React・Three.js・Cannon-esで、狙い、カーブ、空気抵抗、風、キーパーとの駆け引きを楽しめます。
 
 **[最新版で遊ぶ](https://tomuzou.github.io/tomzo-arcade/free-kick/)**
 
-## ver.g.1 / Codex版
+## ver.4.1.c
 
-- 濃紺とミント色の新しいロビー、ステージ選択、プレイHUD。
-- **10球ラッシュ**：10本のゴール数を競い、自己ベストを保存。10本で終了します。
-- **40ステージ選択**：α=基本、β=精密、γ=球数制限、δ=風。どこからでも挑戦できます。
-- **クリア記録**：最少挑戦回数と星評価をブラウザに保存。1回で★★★、3回以内で★★、それ以外は★。
-- **精密照準**：左右・高さ・強さをスライダーで設定してキック。従来のドラッグ操作も利用できます。
-- **弾道表示**、直近10球の結果、成功率、音の切り替え、操作ガイド。
-- ピッチは画面全体に表示。操作パネルはPC・横画面では右下、スマホ縦画面ではコンパクトに下部へ配置し、ボールとゴールに重なる場合だけカメラの表示位置を補正します。精密照準に切り替えてもピッチの表示サイズを維持します。
+ver.4.0.c（Claude Code版）を引き継いで改良を続けている最新版です。
 
-### アイテムで一球をアレンジ
+- **フリープレイ**：連続ゴールの最高記録を保存。
+- **40ステージ**：α=基本、β=高難度、γ=球数制限、δ=風。最初から全ステージを選べます。ステージごとに最少球数と👑（スキルボールを使わずにクリア）を記録。
+- **スキルボール**：蹴る前に球質を選びます。照準中だけ変更でき、モードを始めるとノーマルに戻ります。
 
-蹴る前に1つ選びます。「ノーマル」ならアイテム効果なし。選んだアイテムは次のキックにも保持され、モードを始めるとノーマルに戻ります。飛行中の変更はできません。
-
-| アイテム | 効果 |
+| スキルボール | 効果 |
 |---|---|
-| 🍌 バナナ職人 | カーブのスピン4倍。カーブ0から選ぶと右カーブをセット。CURVEで向きと強さを調整できます。 |
-| 🚀 ロケットスパイク | 初速2.3倍、空気抵抗を軽減。低い照準がおすすめ。 |
-| 🫛 豆つぶボール | 直径と物理的な当たり判定が半分。空気抵抗も軽減。 |
+| 🌀 ナックル | 無回転で、飛行中に不規則に揺れる |
+| ⤵️ ドライブ | 強いトップスピンで急に落ちる |
+| 🔥 キャノン | 初速が速く、曲がりにくい |
+| 🪃 ブーメラン | 序盤はまっすぐ、後半に大きく曲がる |
+| 👻 ゴースト | 固定の壁をすり抜ける（キーパーはすり抜けない） |
 
-描画解像度と影の負荷を抑え、弾道バッファを再利用。物理は固定サブステップで進め、低fpsで時間が遅くなる問題を改善しています。通常球は実寸半径0.11m、32パネル・縫い目・革の質感を追加。芝・刈り込み、細いネット、金属のゴール、段差のあるスタンドも見直しました。
-
-クリア記録、ラッシュ自己ベスト、音と弾道の設定は、このブラウザのlocalStorageに保存されます。途中のミッション進捗は保存されません。保存が利用できない環境でもプレイは可能です。
+- スタジアムは観客入りのスタンド・照明塔・広告ボード、壁は選手の列、キーパーは人型。キック後に球速（km/h）を表示します。
+- 記録と音・弾道表示の設定は、このブラウザの localStorage に保存されます（ver.4.0.c と共通）。
 
 ## 遊び方
 
-ピッチの上を手前にドラッグし、離すとキック。左右の引きでコース、引く量で高さとパワーが変わります。CURVEスライダーでカーブを設定します。精密照準では3つのスライダーとキックボタンを使います。
+ピッチの上を手前にドラッグし、離すとキック。左右の引きでコース、引く量で高さとパワーが変わります。カーブはスライダーで設定します。
 
-PCのショートカット：`←` / `→`でカーブ、`R`で蹴り直し、`Esc`でメニュー（ガイド表示中はガイドを閉じます）。
+PCのショートカット：`←` / `→` でカーブ、`1`〜`6` で球質、`R` で蹴り直し、`M` で音、`T` で弾道表示、`Esc` で戻る。
 
-飛行中の蹴り直しは1失敗として計上します。壁やキーパーに当たっても、ゴールに入れば成功です。γの制限球数で達成不能になった場合は、ステージ最初から再挑戦します。
+壁やキーパーに当たっても、ゴールに入れば成功です。γの制限球数で達成不能になった場合は、ステージ最初から再挑戦します。
 
 ## バージョンコレクション
 
+版名は `ver.<大>.<小>.<作者>`（c = Claude Code、g = Codex）です。過去の版はすべて当時のまま遊べます。
+
 | バージョン | 内容 | プレイ |
 |---|---|---|
-| ver.g.1 | CodexによるUIと機能の改良版 | [遊ぶ](https://tomuzou.github.io/tomzo-arcade/free-kick/ver.g.1/) |
-| ver.c.4 | Claude Code版の改良版。球質を変えるスキルボール（ナックル／ドライブ／キャノン／ゴースト）、ステージ選択、👑記録、球速表示（ソース `c4/`） | [遊ぶ](https://tomuzou.github.io/tomzo-arcade/free-kick/ver.c.4/) |
-| ver.c.3 | 改良前のClaude Code版。リアル物理、風、効果音を含む（5d2df35） | [遊ぶ](https://tomuzou.github.io/tomzo-arcade/free-kick/ver.c.3/) |
-| ver.c.2 | 旧v2。球数制限までを含む凍結版 | [遊ぶ](https://tomuzou.github.io/tomzo-arcade/free-kick/ver.c.2/) |
-| ver.c.1 | 旧v1。初期のフリーキックゲーム | [遊ぶ](https://tomuzou.github.io/tomzo-arcade/free-kick/ver.c.1/) |
+| ver.4.1.c | 最新版（ver.4.0.c から継続改良） | [遊ぶ](https://tomuzou.github.io/tomzo-arcade/free-kick/) |
+| ver.4.0.c | Claude Code版。スキルボール、リアルなスタジアム、👑記録、球速表示 | [遊ぶ](https://tomuzou.github.io/tomzo-arcade/free-kick/ver.4.0.c/) |
+| ver.3.1.g | Codex版。新しいロビー、10球ラッシュ、星評価、精密照準、アイテム | [遊ぶ](https://tomuzou.github.io/tomzo-arcade/free-kick/ver.3.1.g/) |
+| ver.3.0.c | リアル物理、風、効果音 | [遊ぶ](https://tomuzou.github.io/tomzo-arcade/free-kick/ver.3.0.c/) |
+| ver.2.0.c | 球数制限まで | [遊ぶ](https://tomuzou.github.io/tomzo-arcade/free-kick/ver.2.0.c/) |
+| ver.1.0.c | 初期のフリーキックゲーム | [遊ぶ](https://tomuzou.github.io/tomzo-arcade/free-kick/ver.1.0.c/) |
 
-旧URLの[/v1/](https://tomuzou.github.io/tomzo-arcade/free-kick/v1/)・[/v2/](https://tomuzou.github.io/tomzo-arcade/free-kick/v2/)も維持しています。ver.c.1/2のHTMLは旧版の凍結済みアセットを利用します。各旧版から最新版へ戻れます。
+旧名のURL（`/v1/` `/v2/` `/ver.c.1/`〜`/ver.c.4/` `/ver.g.1/`）は新しい名前へ転送します。
 
 ## 開発
 
 ### ローカルで専用ウィンドウを開く（Windows）
 
-リポジトリ直下の `Play-Local.cmd`（アーケードが開きます）か、直下で `npm run play:desktop -- --page=free-kick/` を実行します。ver.c.4は `--page=free-kick/ver.c.4/` です。毎回起動時に現行ソースを本番ビルドし、タブ・アドレスバーのないChrome（未インストールの場合はEdge）の専用ウィンドウで開きます。開発サーバーの自動更新処理は動きません。起動にはNode.jsと`npm ci`で導入した依存パッケージが必要です。
+リポジトリ直下の `Play-Local.cmd`（アーケードが開きます）か、直下で `npm run play:desktop -- --page=free-kick/` を実行します。過去版は `--page=free-kick/ver.4.0.c/` のように指定します。毎回起動時に現行ソースを本番ビルドし、タブ・アドレスバーのないChrome（未インストールの場合はEdge）の専用ウィンドウで開きます。開発サーバーの自動更新処理は動きません。起動にはNode.jsと`npm ci`で導入した依存パッケージが必要です。
 
 内部ではブラウザの描画エンジンと、このPC内だけで待ち受けるローカルサーバー（127.0.0.1:4180）を使用します。独立したexeへの変換ではなく、描画の速さはGPUや画面サイズによって変わります。ウィンドウを閉じるとサーバーも終了します。記録は通常のブラウザとは別の`.desktop/profile`に保存されます。起動に失敗した場合のログは`.desktop/launcher-error.log`です。
 
@@ -68,23 +66,12 @@ npm run build
 npm run verify:archives
 ```
 
-ブラウザテスト：`npm run test:browser`。ローカルではインストール済みChromeを使用します。CI環境で実行する場合は`npx playwright install --with-deps chromium`を先に実行してください。テスト結果とスクリーンショットは`test-results/`に出力します。
+ブラウザテスト：`npm run build` のあと `ARCHIVE_CHECK=1 npm run test:browser`。本番ビルドを preview して全バージョンの表示・相互リンク・旧名の転送を確認します。ローカルではインストール済みChromeを使用します。CI環境で実行する場合は`npx playwright install --with-deps chromium`を先に実行してください。
 
-`src/game/Game.ts`が3D・物理・入力・判定、`stages.ts`がミッション定義、`sfx.ts`が合成音、`progress.ts`が保存データ検証と星評価、`App.tsx`がUIを担当します。共通の開発ルールは`CLAUDE.md`に集約し、`AGENTS.md`から参照します。
+`src/game/Game.ts`が3D・物理・入力・判定、`scenery.ts`が見た目、`stages.ts`がミッション定義、`items.ts`がスキルボール、`sfx.ts`が合成音、`records.ts`が保存データ、`App.tsx`がUIを担当します。共通の開発ルールは`CLAUDE.md`に集約し、`AGENTS.md`から参照します。
 
-## 公開とスナップショット
+## 公開
 
 `main`へのpushで、リポジトリ直下のGitHub Actionsがアーケード全体のテスト・本番ビルド・リンク検証を行い、GitHub Pagesに公開します。本番のbaseは`/tomzo-arcade/free-kick/`です。
 
-Claude版の`public/ver.c.*`は凍結済み成果物です。再生成・上書きしないでください。ただしver.c.4はソースを`c4/`に置いており、直したときは`npm run build:c4`で`public/ver.c.4/`を作り直します。ユーザーの指定でCodex版はver.g.1のまま改良を続け、`public/ver.g.1/`を更新します。
-
-ver.g.1の初回スナップショット作成手順：
-
-```sh
-npm run build -- --base=/tomzo-arcade/free-kick/ver.g.1/
-node scripts/archives.mjs --snapshot-g1
-npm run build
-npm run verify:archives
-```
-
-スナップショットはindex.htmlとassetsのみをコピーし、過去版の入れ子コピーを避けます。次版の公開時は新しいバージョン用のディレクトリを追加し、既存の凍結版を維持してください。
+`public/ver.*`は凍結済みの過去版です。書き換えないでください。最新版を凍結して次の版へ進む手順は`CLAUDE.md`の「バージョン」にあります。
