@@ -5,9 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:c4": "vite c4",
     "build": "tsc && vite build",
-    "build:c4": "node scripts/build-c4.mjs",
     "preview": "vite preview",
     "test": "node --test tests/progress.test.mjs",
     "test:browser": "playwright test",

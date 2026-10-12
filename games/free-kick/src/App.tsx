@@ -12,7 +12,16 @@ import {
 import type { GameState, StageSet } from "./types";
 import { hubUrl } from "@tomzo-arcade/core";
 
-const HUB_URL = hubUrl(import.meta.env.BASE_URL);
+/** 公開ルート（/tomzo-arcade/free-kick/ver.3.1.g/ → /tomzo-arcade/free-kick/）。他バージョンとハブへのリンクの基準 */
+const ROOT = import.meta.env.BASE_URL.replace(/ver\.[^/]+\/$/, "");
+const HUB_URL = hubUrl(ROOT);
+const ARCHIVES = [
+  { href: ROOT, label: "最新版 ↗" },
+  { href: `${ROOT}ver.4.0.c/`, label: "ver.4.0.c ↗" },
+  { href: `${ROOT}ver.3.0.c/`, label: "ver.3.0.c ↗" },
+  { href: `${ROOT}ver.2.0.c/`, label: "ver.2.0.c ↗" },
+  { href: `${ROOT}ver.1.0.c/`, label: "ver.1.0.c ↗" },
+];
 import "./App.css";
 
 const SETS = [
@@ -245,7 +254,7 @@ export default function App() {
                   ← ARCADE
                 </a>
               )}
-              <span className={`version${HUB_URL ? " with-arcade" : ""}`}>ver.g.1 / CODEX</span>
+              <span className={`version${HUB_URL ? " with-arcade" : ""}`}>ver.3.1.g / CODEX</span>
             </header>
             <div className="lobby-layout">
               <section className="hero">
@@ -293,14 +302,11 @@ export default function App() {
                   </button>
                 </div>
                 <div className="archive">
-                  <span>THE COLLECTION / CLAUDE CODE</span>
+                  <span>THE COLLECTION</span>
                   <div>
-                    {[1, 2, 3, 4].map((n) => (
-                      <a
-                        key={n}
-                        href={`${import.meta.env.BASE_URL}ver.c.${n}/`}
-                      >
-                        ver.c.{n} ↗
+                    {ARCHIVES.map((v) => (
+                      <a key={v.label} href={v.href}>
+                        {v.label}
                       </a>
                     ))}
                   </div>
@@ -395,7 +401,7 @@ export default function App() {
           <header className="game-topbar">
             <div className="mini-brand">
               ↗ <span>FREE KICK LAB</span>
-              <small>ver.g.1</small>
+              <small>ver.3.1.g</small>
             </div>
             <nav aria-label="プレイ操作">
               <button

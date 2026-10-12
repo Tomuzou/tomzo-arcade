@@ -279,6 +279,7 @@ button:not(:disabled):active {
 }
 .archive > div {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 10px;
 }

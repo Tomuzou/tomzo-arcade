@@ -4,6 +4,7 @@ import { SKILL_BALLS } from './game/items';
 import { STAGES_A, STAGES_B, STAGES_C, STAGES_D } from './game/stages';
 import { loadRecords, saveRecords, stageKey, withClear, type Records } from './game/records';
 import type { GameState, StageDefinition, StageSet } from './types';
+import { VERSION } from './version';
 import './App.css';
 
 const INITIAL_STATE: GameState = {
@@ -44,13 +45,20 @@ const SETS: { id: StageSet; label: string; note: string; stages: StageDefinition
 ];
 const TOTAL_STAGES = SETS.reduce((n, s) => n + s.stages.length, 0);
 
-/** 公開ルート（/soccer-app/ver.c.4/ → /soccer-app/）。ここから他バージョンへリンクする */
-const ROOT = import.meta.env.BASE_URL.replace(/ver\.c\.\d+\/$/, '');
+/** 公開ルート（/tomzo-arcade/free-kick/ver.4.0.c/ → /tomzo-arcade/free-kick/）。ここから他バージョンへリンクする */
+const ROOT = import.meta.env.BASE_URL.replace(/ver\.[^/]+\/$/, '');
+/** 凍結して公開している過去版（public/ver.*）。新しい順 */
+const ARCHIVES = [
+  { dir: 'ver.4.0.c', note: 'スキルボール' },
+  { dir: 'ver.3.1.g', note: 'Codex' },
+  { dir: 'ver.3.0.c', note: 'リアル物理・風' },
+  { dir: 'ver.2.0.c', note: '球数制限' },
+  { dir: 'ver.1.0.c', note: '初期版' },
+];
 const COLLECTION = [
-  { href: ROOT, label: '最新版 ver.g.1', note: 'Codex' },
-  { href: `${ROOT}ver.c.3/`, label: 'ver.c.3', note: 'リアル物理・風' },
-  { href: `${ROOT}ver.c.2/`, label: 'ver.c.2', note: '球数制限' },
-  { href: `${ROOT}ver.c.1/`, label: 'ver.c.1', note: '初期版' },
+  // 過去版として開かれているときだけ最新版へのリンクを出す
+  ...(ROOT !== import.meta.env.BASE_URL ? [{ href: ROOT, label: '最新版', note: 'Claude Code' }] : []),
+  ...ARCHIVES.filter((v) => v.dir !== VERSION).map((v) => ({ href: `${ROOT}${v.dir}/`, label: v.dir, note: v.note })),
 ];
 
 /** HUD用の風表示テキスト（例 "→ 横風 5m/s / 向かい風 8m/s"） */
@@ -214,7 +222,7 @@ export default function App() {
       {state.mode === null && screen === 'title' && (
         <div className="title-screen">
           <div className="title-card">
-            <div className="title-version">ver.c.4 · Claude Code</div>
+            <div className="title-version">{VERSION} · Claude Code</div>
             <h1 className="title-logo">FREE KICK 3D</h1>
             <p className="title-sub">球質を選んで、壁もキーパーも越えていけ。</p>
             <div className="title-buttons">

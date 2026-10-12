@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { VERSION } from '../version';
 
 /**
  * ver.c.4 のリアル寄りの見た目を作る生成関数群（テクスチャはすべてその場で Canvas 描画する）。
@@ -315,7 +316,7 @@ export function addStadium(scene: THREE.Scene, goalZ: number): void {
     ['FREE KICK 3D', '#0b3a8a', '#ffffff'],
     ['SKILL BALL', '#7a1020', '#ffd166'],
     ['NICE SHOT!', '#0f5132', '#ffffff'],
-    ['ver.c.4', '#1f2937', '#ffb547'],
+    [VERSION, '#1f2937', '#ffb547'],
     ['FAIR PLAY', '#0b3a8a', '#ffffff'],
     ['GOAL!', '#7a1020', '#ffffff'],
   ];
