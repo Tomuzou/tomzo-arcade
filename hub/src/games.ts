@@ -41,4 +41,14 @@ export const GAMES: GameEntry[] = [
       { label: 'ver.1.0.c', path: 'free-kick/ver.1.0.c/', note: '初期版' },
     ],
   },
+  {
+    id: 'bowling',
+    title: 'GIMMICK BOWLING',
+    tagline: '壁で曲げて、全部倒す。',
+    description: '3Dボウリング。普通のレーンに加えて、反発壁とバンパーを使って狙うバンクボウリングモード。',
+    thumb: 'thumbs/bowling.jpg',
+    path: 'bowling/',
+    tags: ['3D', 'スポーツ', '物理'],
+    accent: '#ff8a7a',
+  },
 ];

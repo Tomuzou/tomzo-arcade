@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>GIMMICK BOWLING</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background: #111;
+      }
+      #app {
+        width: 100vw;
+        height: 100vh;
+      }
+      #hud {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        color: #fff;
+        font-family: system-ui, sans-serif;
+        font-size: 14px;
+        background: rgba(0, 0, 0, 0.5);
+        padding: 8px 12px;
+        border-radius: 8px;
+        pointer-events: none;
+        line-height: 1.6;
+        /* 右上の ← ARCADE と重ならない幅に収める */
+        max-width: calc(100vw - 170px);
+      }
+      #arcade-link {
+        position: fixed;
+        top: max(12px, env(safe-area-inset-top));
+        right: 12px;
+        padding: 8px 12px;
+        color: #fff;
+        font-family: system-ui, sans-serif;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 1px;
+        text-decoration: none;
+        background: rgba(0, 0, 0, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.4);
+        border-radius: 999px;
+      }
+      #arcade-link[hidden] {
+        display: none;
+      }
+      #controls {
+        position: fixed;
+        bottom: max(16px, env(safe-area-inset-bottom));
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 12px;
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      #controls button {
+        min-width: 64px;
+        height: 56px;
+        font-size: 20px;
+        color: #fff;
+        background: rgba(0, 0, 0, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.4);
+        border-radius: 12px;
+        touch-action: none;
+        -webkit-tap-highlight-color: transparent;
+        cursor: pointer;
+      }
+      #controls button:active {
+        background: rgba(255, 255, 255, 0.25);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <a id="arcade-link" hidden>← ARCADE</a>
+    <div id="hud">
+      🎳 GIMMICK BOWLING — <span id="mode-name">ノーマル</span><br />
+      <b>Space</b>: 投球 / <b>←→</b>: 移動(バンク時は角度) / <b>R</b>: リセット /
+      <b>M</b>: モード切替<br />
+      倒れたピン: <span id="pin-count">0</span> / <span id="pin-total">10</span>
+    </div>
+    <div id="controls">
+      <button id="btn-left" aria-label="左へ">◀</button>
+      <button id="btn-throw" aria-label="投球">🎳 投球</button>
+      <button id="btn-reset" aria-label="リセット">↺</button>
+      <button id="btn-mode" aria-label="モード切替">🔄</button>
+      <button id="btn-right" aria-label="右へ">▶</button>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -13,6 +13,7 @@ hub/                 # ゲーム一覧のトップ（React + Vite）。PWA（man
 packages/core/       # 全ゲーム共有のユーティリティ（TS のまま各 Vite が直接読む）
 games/<id>/          # 各ゲーム。独立した Vite アプリ（依存ライブラリやバージョンはゲームごとに自由）
   free-kick/         # FREE KICK LAB（全バージョンのアーカイブ込み）
+  bowling/           # GIMMICK BOWLING（旧 Tomuzou/bowling-app）
 scripts/
   build.mjs          # hub と全 games を個別ビルド → dist/（hub）と dist/<id>/ に組み立て
   verify.mjs         # dist 内の全 HTML の js/css/画像参照とリダイレクト先、PWA ファイルの実在を検証
@@ -48,7 +49,7 @@ npm run play:desktop       # 本番ビルドして専用ウィンドウでハブ
 
 - 各ゲームは別ページ。ゲームを切り替えるとページごと切り替わり、WebGL などの資源が確実に解放される。1つの SPA に全ゲームを詰め込まない
 - 共通化するのは「全ゲームで同じになるもの」だけ（保存の安全な読み書き、ハブへのリンク等）。ゲームの中身は各ゲームに閉じる
-- 保存キーはゲームごとに名前空間を分ける（例 `free-kick-lab.g1`）。同じオリジンの localStorage を全ゲームで共有しているため
+- 保存キーはゲームごとに名前空間を分ける（例 `free-kick-3d.c4`、`gimmick-bowling.*`）。同じオリジンの localStorage を全ゲームで共有しているため
 - Service Worker（`hub/public/sw.js`）は `/tomzo-arcade/` 全体が範囲。ネットワーク優先・失敗時だけキャッシュなので、デプロイした更新はそのまま届く。挙動を変えたらキャッシュ名（`tomzo-arcade-vN`）を上げる
 - ブラウザテストはソフトウェア描画（swiftshader）で遅いので CI では回さない
 
