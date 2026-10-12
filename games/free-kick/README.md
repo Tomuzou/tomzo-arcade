@@ -43,7 +43,7 @@ PCのショートカット：`←` / `→`でカーブ、`R`で蹴り直し、`E
 | バージョン | 内容 | プレイ |
 |---|---|---|
 | ver.g.1 | CodexによるUIと機能の改良版 | [遊ぶ](https://tomuzou.github.io/tomzo-arcade/free-kick/ver.g.1/) |
-| ver.c.4 | Claude Code版の改良版。球質を変えるスキルボール（ナックル／ドライブ／キャノン／ゴースト）、ステージ選択、👑記録、球速表示（ブランチ `claude-c4`） | [遊ぶ](https://tomuzou.github.io/tomzo-arcade/free-kick/ver.c.4/) |
+| ver.c.4 | Claude Code版の改良版。球質を変えるスキルボール（ナックル／ドライブ／キャノン／ゴースト）、ステージ選択、👑記録、球速表示（ソース `c4/`） | [遊ぶ](https://tomuzou.github.io/tomzo-arcade/free-kick/ver.c.4/) |
 | ver.c.3 | 改良前のClaude Code版。リアル物理、風、効果音を含む（5d2df35） | [遊ぶ](https://tomuzou.github.io/tomzo-arcade/free-kick/ver.c.3/) |
 | ver.c.2 | 旧v2。球数制限までを含む凍結版 | [遊ぶ](https://tomuzou.github.io/tomzo-arcade/free-kick/ver.c.2/) |
 | ver.c.1 | 旧v1。初期のフリーキックゲーム | [遊ぶ](https://tomuzou.github.io/tomzo-arcade/free-kick/ver.c.1/) |
@@ -76,7 +76,7 @@ npm run verify:archives
 
 `main`へのpushで、リポジトリ直下のGitHub Actionsがアーケード全体のテスト・本番ビルド・リンク検証を行い、GitHub Pagesに公開します。本番のbaseは`/tomzo-arcade/free-kick/`です。
 
-Claude版の`public/ver.c.*`は凍結済み成果物です。再生成・上書きしないでください。ver.c.4のソースは旧リポジトリ`Tomuzou/soccer-app`の`claude-c4`ブランチにあり、そこで`--base=/tomzo-arcade/free-kick/ver.c.4/`でビルドした`index.html`と`assets/`だけを`public/ver.c.4/`に置いています。ユーザーの指定でCodex版はver.g.1のまま改良を続け、`public/ver.g.1/`を更新します。
+Claude版の`public/ver.c.*`は凍結済み成果物です。再生成・上書きしないでください。ただしver.c.4はソースを`c4/`に置いており、直したときは`npm run build:c4`で`public/ver.c.4/`を作り直します。ユーザーの指定でCodex版はver.g.1のまま改良を続け、`public/ver.g.1/`を更新します。
 
 ver.g.1の初回スナップショット作成手順：
 
