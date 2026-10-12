@@ -25,6 +25,16 @@ export interface GameEntry {
 
 export const GAMES: GameEntry[] = [
   {
+    id: 'volcano',
+    title: 'VOLCANO ROLL',
+    tagline: '一粒を、頂上へ。',
+    description: '台を傾け、穴と坂をくぐり抜ける3D玉転がし。ブレーキを使いこなして全5コース、火山の頂上を目指そう。',
+    thumb: 'thumbs/volcano.jpg',
+    path: 'volcano/',
+    tags: ['3D', '玉転がし', 'バランス'],
+    accent: '#ffcb82',
+  },
+  {
     id: 'free-kick',
     title: 'FREE KICK LAB',
     tagline: '狙う、曲げる、風を読む。',
