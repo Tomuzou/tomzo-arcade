@@ -1,0 +1,20 @@
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+// 本番ビルド時のみ GitHub Pages 用のサブパスを base にする。
+// 開発サーバー(dev)では '/' のままにして localhost で素直に開けるようにする。
+export default defineConfig(({ command, isPreview }) => ({
+  base: command === 'build' || isPreview ? '/tomzo-arcade/free-kick/' : '/',
+  plugins: [react()],
+  build: {
+    rollupOptions: {
+      output: {
+        // 大きなライブラリはアプリ本体と分けてキャッシュ効率を上げる
+        manualChunks: {
+          three: ['three'],
+          physics: ['cannon-es'],
+        },
+      },
+    },
+  },
+}));

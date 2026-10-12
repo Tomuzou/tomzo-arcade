@@ -1,0 +1,260 @@
+/* TOMZO ARCADE：夜のゲームセンターのネオン */
+.arcade {
+  --bg: #0d0b1a;
+  --panel: #17142b;
+  --line: #ffffff1c;
+  --muted: #b7b0d6;
+  --gold: #ffd166;
+  --pink: #ff5d8f;
+  --teal: #5ee6c8;
+  min-height: 100vh;
+  padding: calc(20px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+  background:
+    radial-gradient(circle at 15% 0%, #3b1f7a55, transparent 45%),
+    radial-gradient(circle at 90% 20%, #ff5d8f22, transparent 40%),
+    var(--bg);
+}
+
+.top,
+.intro,
+.games,
+.foot {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  letter-spacing: 3px;
+}
+
+.logo b {
+  color: var(--gold);
+}
+
+.logo-mark {
+  width: 30px;
+  height: 30px;
+}
+
+.install {
+  padding: 9px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1b1030;
+  background: var(--gold);
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.intro {
+  padding: 48px 0 32px;
+}
+
+.eyebrow {
+  font-size: 12px;
+  letter-spacing: 4px;
+  color: var(--teal);
+}
+
+.intro h1 {
+  margin: 12px 0;
+  font-size: clamp(34px, 7vw, 64px);
+  line-height: 1.1;
+}
+
+.intro h1 span {
+  background: linear-gradient(90deg, var(--gold), var(--pink));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.lead {
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.games {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 20px;
+}
+
+.card {
+  --accent: var(--gold);
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  overflow: hidden;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.card:hover {
+  transform: translateY(-3px);
+  border-color: var(--accent);
+}
+
+.thumb {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  background: #000;
+}
+
+.thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.play-badge {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #10121a;
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+.card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 18px 18px;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tags span {
+  padding: 2px 8px;
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.card h2 {
+  font-size: 22px;
+  letter-spacing: 1px;
+}
+
+.tagline {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.desc {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.play {
+  margin-top: 6px;
+  padding: 12px;
+  text-align: center;
+  font-weight: 800;
+  color: #10121a;
+  background: var(--accent);
+  border-radius: 12px;
+  text-decoration: none;
+}
+
+.versions summary {
+  padding: 4px 0;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.versions ul {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 6px;
+  list-style: none;
+}
+
+.versions a {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #f4f1ff;
+  text-decoration: none;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+}
+
+.versions a:hover {
+  border-color: var(--accent);
+}
+
+.versions small {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.card.soon {
+  min-height: 260px;
+  background: transparent;
+  border-style: dashed;
+}
+
+.card.soon:hover {
+  transform: none;
+  border-color: var(--line);
+}
+
+.soon-inner {
+  flex: 1;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.soon-icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  font-size: 28px;
+  font-weight: 800;
+  border: 2px dashed var(--line);
+  border-radius: 16px;
+}
+
+.foot {
+  margin-top: 40px;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}

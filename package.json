@@ -1,0 +1,20 @@
+{
+  "name": "tomzo-arcade",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "hub",
+    "games/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @tomzo-arcade/hub",
+    "dev:free-kick": "npm run dev -w @tomzo-arcade/free-kick",
+    "build": "node scripts/build.mjs",
+    "verify": "node scripts/verify.mjs",
+    "test": "npm test --workspaces --if-present",
+    "test:browser": "npm run test:browser --workspaces --if-present",
+    "play:desktop": "node scripts/desktop.mjs"
+  }
+}
