@@ -15,7 +15,7 @@ CLAUDE.md と games/free-kick/CLAUDE.md を読んで、TOMZO ARCADE の現状を
 現状（2026-10-12 時点）:
 - このリポジトリ（Tomuzou/tomzo-arcade、ブランチ main）はブラウザのミニゲーム集。公開URLは https://tomuzou.github.io/tomzo-arcade/ 。main に push すると GitHub Actions がテスト・ビルド・検証して GitHub Pages に公開する
 - 構成は npm workspaces：hub/（ゲーム一覧・PWA）、packages/core/（共通処理）、games/<id>/（各ゲーム）。ゲームの追加手順は CLAUDE.md の「ゲームを追加する手順」
-- 収録ゲームは games/free-kick/（FREE KICK 3D / FREE KICK LAB）の1本。最新版は ver.4.1.c（ver.4.0.c を引き継いだ Claude 版、src/）。過去版 ver.1.0.c / 2.0.c / 3.0.c / 3.1.g（Codex 版）/ 4.0.c は public/ の凍結ビルド。旧名（ver.c.N, ver.g.1, v1, v2）は転送ページで新しい名前へ飛ぶ（2026-10-12 に改名）
+- 収録ゲームは games/free-kick/（FREE KICK LAB）の1本。最新版は ver.4.1.c（ver.4.0.c を引き継いだ Claude 版、src/）。過去版 ver.1.0.c / 2.0.c / 3.0.c / 3.1.g（Codex 版）/ 4.0.c は public/ の凍結ビルド。旧名（ver.c.N, ver.g.1, v1, v2）は転送ページで新しい名前へ飛ぶ（2026-10-12 に改名）
 - FREE KICK LAB は旧リポジトリ Tomuzou/soccer-app から移した。旧URL /soccer-app/… は soccer-app 側の転送ページで /tomzo-arcade/free-kick/… へ飛ぶ。開発履歴は soccer-app に残っている
 - 版の凍結手順と版名のルールは games/free-kick/CLAUDE.md の「バージョン」
 - FREE KICK のブラウザテスト（Playwright）は本番ビルドを preview して全版の表示・リンク・旧名転送を確認する（npm run build のあと ARCHIVE_CHECK=1 npm run test:browser、約20秒）。CI では回していない。ゲームプレイ自体のブラウザテストは ver.3.1.g 用しかなかったので今は無い

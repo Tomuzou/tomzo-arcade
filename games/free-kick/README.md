@@ -1,4 +1,4 @@
-# FREE KICK 3D — ver.4.1.c
+# FREE KICK LAB — ver.4.1.c
 
 > TOMZO ARCADE の1タイトルです。[アーケードのトップ](https://tomuzou.github.io/tomzo-arcade/) から他のゲームも遊べます。移行前の開発履歴は旧リポジトリ [Tomuzou/soccer-app](https://github.com/Tomuzou/soccer-app) にあります。
 

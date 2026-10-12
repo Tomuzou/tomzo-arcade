@@ -1,4 +1,4 @@
-# FREE KICK 3D（FREE KICK LAB）— CLAUDE.md
+# FREE KICK LAB — CLAUDE.md
 
 > このゲームは **TOMZO ARCADE** の `games/free-kick/`（公開URL `/tomzo-arcade/free-kick/`）。アーケード共通のルール（構成・ビルド・公開・ゲームの追加）はリポジトリ直下の `CLAUDE.md`。
 > 旧リポジトリ `Tomuzou/soccer-app` から移行した。それ以前の開発履歴はそちらに残っている。

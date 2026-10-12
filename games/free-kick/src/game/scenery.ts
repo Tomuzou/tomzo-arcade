@@ -313,7 +313,7 @@ export function addStadium(scene: THREE.Scene, goalZ: number): void {
 
   // LED 広告ボード（ゴール裏）。照明に左右されない発光面として描く
   const ads: [string, string, string][] = [
-    ['FREE KICK 3D', '#0b3a8a', '#ffffff'],
+    ['FREE KICK LAB', '#0b3a8a', '#ffffff'],
     ['SKILL BALL', '#7a1020', '#ffd166'],
     ['NICE SHOT!', '#0f5132', '#ffffff'],
     [VERSION, '#1f2937', '#ffb547'],

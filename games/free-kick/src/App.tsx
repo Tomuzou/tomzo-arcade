@@ -231,7 +231,7 @@ export default function App() {
           )}
           <div className="title-card">
             <div className="title-version">{VERSION} · Claude Code</div>
-            <h1 className="title-logo">FREE KICK 3D</h1>
+            <h1 className="title-logo">FREE KICK LAB</h1>
             <p className="title-sub">球質を選んで、壁もキーパーも越えていけ。</p>
             <div className="title-buttons">
               <button className="menu-btn primary" onClick={() => gameRef.current?.startFreePlay()}>
