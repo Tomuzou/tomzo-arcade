@@ -51,4 +51,14 @@ export const GAMES: GameEntry[] = [
     tags: ['3D', 'スポーツ', '物理'],
     accent: '#ff8a7a',
   },
+  {
+    id: 'claw-machine',
+    title: 'CLAW MACHINE 3D',
+    tagline: 'その一手で、つかめるか。',
+    description: '3Dクレーンゲーム。おまかせで並ぶランダムモードと、狙う景品を選べるセレクトモード。30秒の制限時間つき。',
+    thumb: 'thumbs/claw-machine.jpg',
+    path: 'claw-machine/',
+    tags: ['3D', 'クレーンゲーム', '物理'],
+    accent: '#ffca28',
+  },
 ];

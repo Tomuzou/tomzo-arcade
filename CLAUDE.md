@@ -14,6 +14,7 @@ packages/core/       # 全ゲーム共有のユーティリティ（TS のまま
 games/<id>/          # 各ゲーム。独立した Vite アプリ（依存ライブラリやバージョンはゲームごとに自由）
   free-kick/         # FREE KICK LAB（全バージョンのアーカイブ込み）
   bowling/           # GIMMICK BOWLING（旧 Tomuzou/bowling-app）
+  claw-machine/      # CLAW MACHINE 3D（旧 Tomuzou/claw-machine-app。Vite 8・three 0.185 を独自に使う）
 scripts/
   build.mjs          # hub と全 games を個別ビルド → dist/（hub）と dist/<id>/ に組み立て
   verify.mjs         # dist 内の全 HTML の js/css/画像参照とリダイレクト先、PWA ファイルの実在を検証

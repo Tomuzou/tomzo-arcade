@@ -12,6 +12,7 @@
     "dev": "npm run dev -w @tomzo-arcade/hub",
     "dev:free-kick": "npm run dev -w @tomzo-arcade/free-kick",
     "dev:bowling": "npm run dev -w @tomzo-arcade/bowling",
+    "dev:claw-machine": "npm run dev -w @tomzo-arcade/claw-machine",
     "build": "node scripts/build.mjs",
     "verify": "node scripts/verify.mjs",
     "test": "npm test --workspaces --if-present",
