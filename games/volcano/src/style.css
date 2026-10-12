@@ -42,6 +42,11 @@ h1 span { color: #ffbd70; }
 .help { flex: 1; max-width: 510px; }
 .hint { margin: 0 0 7px; color: #e1ddcd; font-size: 13px; line-height: 1.65; }
 .keys { color: #82968f; font-size: 11px; margin: 0; }
+.sensor-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.sensor-actions .quiet { font-size: 11px; padding: 7px 10px; }
+.sensor-actions button[aria-pressed="true"] { border-color: #70dfca; color: #70dfca; }
+.sensor-actions button:disabled { opacity: 0.45; cursor: default; }
+.sensor-status { color: #9aafa8; font-size: 10px; margin: 5px 0 0; line-height: 1.5; }
 .controls { display: flex; gap: 16px; align-items: center; touch-action: none; user-select: none; }
 .dpad { display: grid; grid-template-columns: repeat(3, 42px); grid-template-rows: repeat(2, 38px); gap: 4px; }
 .dpad button, .brake { background: #22373b; color: #c0ded2; border: 1px solid #ffffff20; border-radius: 9px; font-weight: 700; touch-action: none; }

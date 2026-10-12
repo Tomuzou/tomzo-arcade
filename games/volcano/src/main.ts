@@ -3,6 +3,7 @@ import { hubUrl, loadJson, saveJson } from '@tomzo-arcade/core';
 import { STAGES } from './stages';
 import { advance, STEP, type Ball, type Input } from './physics';
 import { BoardScene } from './scene';
+import { TiltControls } from './tilt';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
@@ -21,7 +22,10 @@ app.innerHTML = `
       <div class="overlay" id="overlay"><div class="dialog" id="dialog" role="dialog" aria-labelledby="dialog-title"></div></div>
     </section>
     <footer class="bottom">
-      <div class="help"><p class="hint" id="hint" aria-live="polite"></p><p class="keys">矢印 / WASD：傾ける　Space：ブレーキ　R：最初から　Esc：一時停止</p></div>
+      <div class="help"><p class="hint" id="hint" aria-live="polite"></p><p class="keys">矢印 / WASD：傾ける　Space：ブレーキ　R：最初から　Esc：一時停止</p>
+        <div class="sensor-actions"><button class="quiet" id="tilt-toggle" aria-pressed="false">スマホの傾きで操作</button><button class="quiet" id="tilt-reset" disabled>傾きをリセット</button></div>
+        <p class="sensor-status" id="tilt-status" aria-live="polite">傾き操作はボタンで有効にできます。</p>
+      </div>
       <div class="controls" aria-label="玉の操作">
         <div class="dpad"><button data-direction="up" aria-label="奥へ転がす">▲</button><button data-direction="left" aria-label="左へ転がす">◀</button><button data-direction="down" aria-label="手前へ転がす">▼</button><button data-direction="right" aria-label="右へ転がす">▶</button></div>
         <button class="brake" data-direction="brake">BRAKE<small>長押しで減速</small></button>
@@ -63,13 +67,26 @@ if (raw && typeof raw === 'object') {
   }
 }
 const format = (seconds: number) => seconds.toFixed(1);
+const tilt = new TiltControls(message => {
+  el('tilt-status').textContent = message;
+  el('tilt-toggle').textContent = tilt.active ? '傾き操作をOFF' : tilt.pending ? 'センサー待機中…' : 'スマホの傾きで操作';
+  el('tilt-toggle').setAttribute('aria-pressed', String(tilt.active));
+  (el('tilt-toggle') as HTMLButtonElement).disabled = tilt.pending;
+  (el('tilt-reset') as HTMLButtonElement).disabled = !tilt.active;
+});
+el('tilt-toggle').addEventListener('click', () => {
+  if (tilt.active) tilt.disable();
+  else { if (phase === 'rolling') pause(); void tilt.enable(); }
+});
+el('tilt-reset').addEventListener('click', () => tilt.calibrate());
 
-function input(): Input {
+function input(dt: number): Input {
   const directions = new Set([...held].map(code => keyDirections[code]));
   touch.forEach(direction => directions.add(direction));
+  const sensor = tilt.read(dt);
   return {
-    x: Number(directions.has('right')) - Number(directions.has('left')),
-    z: Number(directions.has('down')) - Number(directions.has('up')),
+    x: Number(directions.has('right')) - Number(directions.has('left')) || sensor.x,
+    z: Number(directions.has('down')) - Number(directions.has('up')) || sensor.z,
     brake: directions.has('brake'),
   };
 }
@@ -99,6 +116,7 @@ function showDialog(html: string): void {
 }
 
 function hideDialog(): void {
+  tilt.calibrate();
   overlay.hidden = true;
   document.querySelectorAll<HTMLButtonElement>('.controls button').forEach(button => button.disabled = false);
   (document.activeElement as HTMLElement | null)?.blur();
@@ -204,7 +222,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) suspe
 function loop(now: number): void {
   const dt = Math.min((now - last) / 1000, 0.05);
   last = now;
-  const controls = phase === 'rolling' ? input() : { x: 0, z: 0, brake: false };
+  const controls = phase === 'rolling' ? input(dt) : { x: 0, z: 0, brake: false };
   if (phase === 'rolling') {
     accumulator += dt;
     while (accumulator >= STEP && phase === 'rolling') {
@@ -232,4 +250,4 @@ view.load(STAGES[0]); syncHud(); menu();
 frame = requestAnimationFrame(loop);
 window.addEventListener('pagehide', () => { clearInput(); if (phase === 'rolling') pause(); });
 // Vite の差し替え時も WebGL 資源と描画ループを解放。
-if (import.meta.hot) import.meta.hot.dispose(() => { cancelAnimationFrame(frame); view.dispose(); });
+if (import.meta.hot) import.meta.hot.dispose(() => { cancelAnimationFrame(frame); view.dispose(); tilt.dispose(); });

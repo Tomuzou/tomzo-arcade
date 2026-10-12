@@ -1,5 +1,51 @@
 import { test, expect } from '@playwright/test';
 
+test('tilt permission, neutral calibration, sensor play, and switching off work', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(DeviceOrientationEvent, 'requestPermission', { value: async () => 'granted', configurable: true });
+  });
+  await page.goto('./');
+  await page.locator('#tilt-toggle').click();
+  await expect(page.locator('#tilt-toggle')).toHaveText('センサー待機中…');
+  await page.evaluate(() => window.dispatchEvent(new DeviceOrientationEvent('deviceorientation', { beta: 30, gamma: 5 })));
+  await expect(page.locator('#tilt-toggle')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#tilt-reset').click();
+  await expect(page.locator('#tilt-status')).toContainText('この持ち方が基準');
+  await page.locator('[data-course="0"]').click();
+  await page.evaluate(() => {
+    const timer = setInterval(() => window.dispatchEvent(new DeviceOrientationEvent('deviceorientation', { beta: 12, gamma: 5 })), 50);
+    (window as Window & { sensorTestTimer?: ReturnType<typeof setInterval> }).sensorTestTimer = timer;
+  });
+  await expect(page.locator('#dialog-title')).toHaveText('ゴール！', { timeout: 30000 });
+  await page.evaluate(() => clearInterval((window as Window & { sensorTestTimer?: ReturnType<typeof setInterval> }).sensorTestTimer));
+  await page.locator('#tilt-toggle').click();
+  await expect(page.locator('#tilt-toggle')).toHaveAttribute('aria-pressed', 'false');
+  await expect(page.locator('#tilt-reset')).toBeDisabled();
+});
+
+test('denied sensor permission keeps button controls available', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(DeviceOrientationEvent, 'requestPermission', { value: async () => 'denied', configurable: true });
+  });
+  await page.goto('./');
+  await page.locator('#tilt-toggle').click();
+  await expect(page.locator('#tilt-status')).toContainText('許可がありません');
+  await expect(page.locator('#tilt-toggle')).toBeEnabled();
+  await page.locator('[data-course="0"]').click();
+  await expect(page.locator('[data-direction="up"]')).toBeEnabled();
+});
+
+test('missing or invalid sensor data times out with a usable fallback', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(DeviceOrientationEvent, 'requestPermission', { value: async () => 'granted', configurable: true });
+  });
+  await page.goto('./');
+  await page.locator('#tilt-toggle').click();
+  await page.evaluate(() => window.dispatchEvent(new DeviceOrientationEvent('deviceorientation', { beta: null, gamma: null })));
+  await expect(page.locator('#tilt-status')).toContainText('取得できませんでした', { timeout: 8000 });
+  await expect(page.locator('#tilt-toggle')).toBeEnabled();
+});
+
 test('keyboard play reaches the goal, stores a best time, and advances courses', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
