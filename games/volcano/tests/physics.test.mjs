@@ -85,3 +85,11 @@ test('all five courses have a playable route to the goal using ordinary input', 
     assert.equal(outcome, 'goal', `course ${index + 1}: ${JSON.stringify(ball)}`);
   });
 });
+
+test('wall and rail impacts report the hit speed for sound, and free rolling reports none', () => {
+  const ball = { x: BOARD_X - BALL_RADIUS - 0.001, z: 0, vx: 3, vz: 0 };
+  advance(ball, idle, flat);
+  assert.ok(ball.impact > 2.5);
+  advance(ball, idle, flat);
+  assert.equal(ball.impact, 0);
+});

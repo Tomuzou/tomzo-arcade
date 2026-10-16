@@ -4,7 +4,8 @@ export const BALL_RADIUS = 0.22;
 export const BOARD_X = 4.5;
 export const BOARD_Z = 6;
 export const STEP = 1 / 120;
-export interface Ball extends Point { vx: number; vz: number }
+/** impact はその刻みで壁・外枠に当たった速さ（効果音用）。 */
+export interface Ball extends Point { vx: number; vz: number; impact?: number }
 export interface Input extends Point { brake: boolean }
 export type Outcome = 'rolling' | 'fall' | 'goal';
 
@@ -34,6 +35,7 @@ function distanceToSegment(p: Point, a: Point, b: Point): number {
 
 export function advance(ball: Ball, input: Input, stage: Stage, dt = STEP): Outcome {
   const before = { x: ball.x, z: ball.z };
+  let impact = 0;
   const gradient = slope(stage, ball.x, ball.z);
   const length = Math.max(1, Math.hypot(input.x, input.z));
   const damping = Math.exp(-(input.brake ? 8 : 0.9) * dt);
@@ -47,9 +49,11 @@ export function advance(ball: Ball, input: Input, stage: Stage, dt = STEP): Outc
   ball.z += ball.vz * dt;
   const limitX = BOARD_X - BALL_RADIUS, limitZ = BOARD_Z - BALL_RADIUS;
   if (Math.abs(ball.x) > limitX) {
+    impact = Math.max(impact, Math.abs(ball.vx));
     ball.x = Math.sign(ball.x) * limitX; ball.vx *= -0.35;
   }
   if (Math.abs(ball.z) > limitZ) {
+    impact = Math.max(impact, Math.abs(ball.vz));
     ball.z = Math.sign(ball.z) * limitZ; ball.vz *= -0.35;
   }
   for (const wall of stage.walls) {
@@ -70,8 +74,9 @@ export function advance(ball: Ball, input: Input, stage: Stage, dt = STEP): Outc
     }
     ball.x += nx * overlap; ball.z += nz * overlap;
     const dot = ball.vx * nx + ball.vz * nz;
-    if (dot < 0) { ball.vx -= 1.35 * dot * nx; ball.vz -= 1.35 * dot * nz; }
+    if (dot < 0) { impact = Math.max(impact, -dot); ball.vx -= 1.35 * dot * nx; ball.vz -= 1.35 * dot * nz; }
   }
+  ball.impact = impact;
   for (const hole of stage.holes) {
     if (distanceToSegment(hole, before, ball) < hole.radius - BALL_RADIUS * 0.35) return 'fall';
   }

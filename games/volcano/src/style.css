@@ -38,6 +38,9 @@ h1 span { color: #ffbd70; }
 .course-list b { color: #ffcb82; font-size: 16px; }
 .course-list span { flex: 1; font-size: 13px; }
 .course-list small { color: #91b7a5; font-size: 11px; }
+.dialog .total { font-size: 12px; margin: -4px auto 0; }
+.dialog .total b { color: #ffcb82; font-variant-numeric: tabular-nums; }
+.top-links button[aria-pressed="false"] { color: #82968f; }
 .bottom { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-top: 14px; }
 .help { flex: 1; max-width: 510px; }
 .hint { margin: 0 0 7px; color: #e1ddcd; font-size: 13px; line-height: 1.65; }

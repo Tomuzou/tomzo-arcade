@@ -1,6 +1,8 @@
 import * as THREE from 'three';
-import { BALL_RADIUS, BOARD_X, BOARD_Z, surface, type Ball, type Input } from './physics';
+import { BALL_RADIUS, BOARD_X, BOARD_Z, slope, surface, type Ball, type Input } from './physics';
 import type { Point, Stage } from './stages';
+
+const UP = new THREE.Vector3(0, 1, 0);
 
 /** 描画だけを担当。物理は台の座標系で独立して動かす。 */
 export class BoardScene {
@@ -9,7 +11,9 @@ export class BoardScene {
   private camera = new THREE.PerspectiveCamera(37, 1, 0.1, 100);
   private board = new THREE.Group();
   private ball: THREE.Mesh;
+  private shadow: THREE.Mesh;
   private checkpoint: THREE.Mesh | null = null;
+  private goal: THREE.Mesh | null = null;
   private resizeObserver: ResizeObserver;
   private stage: Stage | null = null;
 
@@ -35,6 +39,12 @@ export class BoardScene {
     const band = new THREE.Mesh(new THREE.TorusGeometry(BALL_RADIUS * 0.99, 0.026, 8, 40),
       new THREE.MeshStandardMaterial({ color: 0xff7652, roughness: 0.45 }));
     this.ball.add(band);
+    // 坂の上でも玉の高さが分かるよう、斜面に沿わせた影を落とす。
+    const shadowGeometry = new THREE.CircleGeometry(BALL_RADIUS * 1.05, 24);
+    shadowGeometry.rotateX(-Math.PI / 2);
+    this.shadow = new THREE.Mesh(shadowGeometry, new THREE.MeshBasicMaterial({
+      color: 0x000000, transparent: true, opacity: 0.32, depthWrite: false,
+    }));
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(host);
     this.resize();
@@ -125,7 +135,7 @@ export class BoardScene {
     }
     this.ring(stage.start, 0.4, '#ffffff', 0.028);
     this.checkpoint = this.ring(stage.checkpoint, 0.43, '#64b9ee', 0.05);
-    this.ring(stage.goal, 0.56, '#ffbd45', 0.085);
+    this.goal = this.ring(stage.goal, 0.56, '#ffbd45', 0.085);
     this.ring(stage.goal, 0.72, '#fff0ae', 0.025);
     const beacon = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.8, 10),
       new THREE.MeshStandardMaterial({ color: 0xffc65c }));
@@ -133,7 +143,7 @@ export class BoardScene {
     const flag = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.25, 0.03),
       new THREE.MeshStandardMaterial({ color: 0xffc65c }));
     flag.position.set(beacon.position.x + 0.2, beacon.position.y + 0.25, beacon.position.z);
-    this.board.add(beacon, flag, this.ball);
+    this.board.add(beacon, flag, this.shadow, this.ball);
   }
 
   private ring(p: Point, radius: number, color: string, thickness: number): THREE.Mesh {
@@ -154,16 +164,24 @@ export class BoardScene {
   draw(ball: Ball, input: Input, checkpoint: boolean, fallDepth: number, dt: number): void {
     if (!this.stage) return;
     this.ball.position.set(ball.x, surface(this.stage, ball.x, ball.z) + BALL_RADIUS - fallDepth, ball.z);
+    const gradient = slope(this.stage, ball.x, ball.z);
+    this.shadow.position.set(ball.x, surface(this.stage, ball.x, ball.z) + 0.02, ball.z);
+    this.shadow.quaternion.setFromUnitVectors(UP, new THREE.Vector3(-gradient.x, 1, -gradient.z).normalize());
+    // 穴に落ちていく間は影を薄くする。
+    (this.shadow.material as THREE.MeshBasicMaterial).opacity = 0.32 * Math.max(0, 1 - fallDepth * 3);
     this.ball.rotateOnWorldAxis(new THREE.Vector3(ball.vz, 0, -ball.vx).normalize(), Math.hypot(ball.vx, ball.vz) * dt / BALL_RADIUS);
     const blend = 1 - Math.exp(-8 * dt);
     this.board.rotation.x += (input.z * 0.045 - this.board.rotation.x) * blend;
     this.board.rotation.z += (-input.x * 0.045 - this.board.rotation.z) * blend;
     if (this.checkpoint) (this.checkpoint.material as THREE.MeshStandardMaterial).color.set(checkpoint ? '#9bed83' : '#64b9ee');
+    if (this.goal) (this.goal.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.2 + 0.3 * (1 + Math.sin(performance.now() / 260)) / 2;
     this.renderer.render(this.scene, this.camera);
   }
 
   private clearBoard(): void {
     this.ball.removeFromParent();
+    this.shadow.removeFromParent();
+    this.checkpoint = null; this.goal = null;
     this.board.traverse(obj => {
       if (obj instanceof THREE.Mesh || obj instanceof THREE.Line) {
         obj.geometry.dispose();
@@ -176,6 +194,7 @@ export class BoardScene {
 
   dispose(): void {
     this.clearBoard();
+    this.shadow.geometry.dispose(); (this.shadow.material as THREE.Material).dispose();
     this.ball.traverse(obj => {
       if (obj instanceof THREE.Mesh) { obj.geometry.dispose(); (obj.material as THREE.Material).dispose(); }
     });

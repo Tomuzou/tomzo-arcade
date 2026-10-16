@@ -1,16 +1,17 @@
 import './style.css';
 import { hubUrl, loadJson, saveJson } from '@tomzo-arcade/core';
-import { STAGES } from './stages';
+import { STAGES, type Point } from './stages';
 import { advance, STEP, type Ball, type Input } from './physics';
 import { BoardScene } from './scene';
 import { TiltControls } from './tilt';
+import { Sfx } from './sfx';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 app.innerHTML = `
   <main class="shell">
     <header class="top">
       <div class="brand"><small>TOMZO ARCADE / MARBLE CHALLENGE</small><h1>VOLCANO <span>ROLL</span></h1></div>
-      <nav class="top-links" aria-label="戻る・メニュー"><button class="quiet" id="courses">メニュー</button><a id="arcade">← ゲーム選択</a></nav>
+      <nav class="top-links" aria-label="戻る・メニュー"><button class="quiet" id="sound" aria-pressed="true">音 ON</button><button class="quiet" id="courses">メニュー</button><a id="arcade">← ゲーム選択</a></nav>
     </header>
     <section class="status" aria-label="プレイ状況">
       <div><span class="stage-label" id="stage-label"></span><h2 class="stage-name" id="stage-name"></h2></div>
@@ -50,7 +51,8 @@ type Phase = 'menu' | 'rolling' | 'paused' | 'fall' | 'goal';
 let phase: Phase = 'menu';
 let index = 0;
 let ball: Ball = { ...STAGES[0].start, vx: 0, vz: 0 };
-let elapsed = 0, falls = 0, checkpoint = false, fallAge = 0, accumulator = 0;
+let elapsed = 0, falls = 0, checkpoint = false, checkpointAt = 0, fallAge = 0, accumulator = 0;
+let fallHole: Point | null = null;
 let last = performance.now(), frame = 0, hudAge = 0;
 const held = new Set<string>();
 const keyDirections: Record<string, string> = {
@@ -67,6 +69,18 @@ if (raw && typeof raw === 'object') {
   }
 }
 const format = (seconds: number) => seconds.toFixed(1);
+const SOUND_KEY = 'volcano-roll.sound.v1';
+const sfx = new Sfx(loadJson<unknown>(SOUND_KEY, true) === false);
+function syncSound(): void {
+  el('sound').textContent = sfx.muted ? '音 OFF' : '音 ON';
+  el('sound').setAttribute('aria-pressed', String(!sfx.muted));
+}
+el('sound').addEventListener('click', () => {
+  sfx.muted = !sfx.muted;
+  saveJson(SOUND_KEY, !sfx.muted);
+  syncSound();
+});
+syncSound();
 const tilt = new TiltControls(message => {
   el('tilt-status').textContent = message;
   el('tilt-toggle').textContent = tilt.active ? '傾き操作をOFF' : tilt.pending ? 'センサー待機中…' : 'スマホの傾きで操作';
@@ -102,8 +116,10 @@ function syncHud(): void {
   el('time').textContent = format(elapsed);
   el('falls').textContent = String(falls);
   el('best').textContent = records[index] ? format(records[index]) : '—';
-  el('hint').textContent = checkpoint ? '中継地点に到着！ 落ちても青い輪から再挑戦できます。' : STAGES[index].hint;
-  el('hint').classList.toggle('toast', checkpoint);
+  // 中継地点の通知は3秒ほどで元のヒントに戻す。
+  const toast = checkpoint && elapsed - checkpointAt < 3;
+  el('hint').textContent = toast ? '中継地点に到着！ 落ちても青い輪から再挑戦できます。' : STAGES[index].hint;
+  el('hint').classList.toggle('toast', toast);
 }
 
 function showDialog(html: string): void {
@@ -127,11 +143,18 @@ function hideDialog(): void {
 function start(course: number): void {
   index = course;
   ball = { ...STAGES[index].start, vx: 0, vz: 0 };
-  elapsed = 0; falls = 0; checkpoint = false; fallAge = 0;
+  elapsed = 0; falls = 0; checkpoint = false; fallAge = 0; fallHole = null;
   phase = 'rolling';
   clearInput(); hideDialog();
   view.load(STAGES[index]);
   syncHud();
+}
+
+function courseList(): string {
+  const all = STAGES.every((_, i) => records[i]);
+  const total = STAGES.reduce((sum, _, i) => sum + (records[i] ?? 0), 0);
+  return `<div class="course-list">${STAGES.map((stage, i) => `<button data-course="${i}"><b>0${i + 1}</b><span>${stage.name}</span><small>${records[i] ? `${format(records[i])} s` : '挑戦する →'}</small></button>`).join('')}</div>
+    ${all ? `<p class="total">全コース合計ベスト <b>${format(total)} 秒</b></p>` : ''}`;
 }
 
 function menu(): void {
@@ -140,7 +163,7 @@ function menu(): void {
   showDialog(`<div class="eyebrow">A LITTLE BALL. A BIG ADVENTURE.</div>
     <h2 id="dialog-title">一粒を、頂上へ。</h2>
     <p>台を傾けて、穴や坂をくぐり抜けよう。<br>金色の輪に入ればゴール。ブレーキが攻略の鍵。</p>
-    <div class="course-list">${STAGES.map((stage, i) => `<button data-course="${i}"><b>0${i + 1}</b><span>${stage.name}</span><small>${records[i] ? `${format(records[i])} s` : '挑戦する →'}</small></button>`).join('')}</div>`);
+    ${courseList()}`);
 }
 
 function pause(): void {
@@ -148,11 +171,15 @@ function pause(): void {
   showDialog(`<div class="eyebrow">TAKE A BREATH</div><h2 id="dialog-title">一時停止</h2>
     <p>タイマーは止まっています。<br>続きから遊ぶか、別のコースを選べます。</p>
     <div class="actions"><button class="primary" data-action="resume">続ける</button><button class="quiet" data-action="restart">最初から</button></div>
-    <div class="course-list">${STAGES.map((stage, i) => `<button data-course="${i}"><b>0${i + 1}</b><span>${stage.name}</span><small>${records[i] ? `${format(records[i])} s` : '挑戦する →'}</small></button>`).join('')}</div>`);
+    ${courseList()}`);
 }
 
 function fell(): void {
   phase = 'fall'; fallAge = 0; falls++;
+  // 吸い込まれる演出のため、いちばん近い穴へ玉を寄せていく。
+  const holes = STAGES[index].holes;
+  fallHole = holes.reduce((a, b) => Math.hypot(ball.x - a.x, ball.z - a.z) <= Math.hypot(ball.x - b.x, ball.z - b.z) ? a : b);
+  sfx.fall();
   syncHud(); clearInput();
 }
 
@@ -164,13 +191,15 @@ function fallDialog(): void {
 
 function goal(): void {
   phase = 'goal';
-  const best = !records[index] || elapsed < records[index];
+  sfx.goal();
+  const previous = records[index];
+  const best = !previous || elapsed < previous;
   if (best) { records[index] = elapsed; saveJson(KEY, records); }
   syncHud();
   const all = STAGES.every((_, i) => records[i]);
   showDialog(`<div class="eyebrow">${best ? 'NEW BEST!' : 'NICE ROLL!'}</div>
     <h2 id="dialog-title">${index === STAGES.length - 1 ? '頂上に到着！' : 'ゴール！'}</h2>
-    <p>${STAGES[index].name} · ${format(elapsed)} 秒 · 落下 ${falls} 回<br>${all ? '全5コース制覇！ 次はベストタイムに挑戦。' : '一粒ぶんの冒険、クリア。'}</p>
+    <p>${STAGES[index].name} · ${format(elapsed)} 秒 · 落下 ${falls} 回${previous ? `<br>前回ベスト ${format(previous)} 秒（${best ? '−' : '+'}${format(Math.abs(elapsed - previous))}）` : ''}<br>${all ? '全5コース制覇！ 次はベストタイムに挑戦。' : '一粒ぶんの冒険、クリア。'}</p>
     <div class="actions">${index < STAGES.length - 1 ? '<button class="primary" data-action="next">次のコースへ →</button>' : '<button class="primary" data-action="menu">コース選択</button>'}<button class="quiet" data-action="restart">もう一度</button>${index < STAGES.length - 1 ? '<button class="quiet" data-action="menu">コース選択</button>' : ''}</div>`);
 }
 
@@ -185,12 +214,15 @@ dialog.addEventListener('click', event => {
     case 'menu': phase = 'menu'; menu(); break;
     case 'retry':
       ball = { ...(checkpoint ? STAGES[index].checkpoint : STAGES[index].start), vx: 0, vz: 0 };
-      fallAge = 0; phase = 'rolling'; clearInput(); hideDialog(); break;
+      fallAge = 0; fallHole = null; phase = 'rolling'; clearInput(); hideDialog(); break;
   }
 });
 el('courses').addEventListener('click', menu);
 
 window.addEventListener('keydown', event => {
+  // ブレーキを押したまま落下・ゴールしたとき、キーリピートが表示直後のボタンを押さないようにする。
+  if (!overlay.hidden && event.repeat && (event.code === 'Space' || event.code === 'Enter')) { event.preventDefault(); return; }
+  if (event.code === 'KeyR' && !event.repeat && phase === 'fall') { start(index); return; }
   if (event.code === 'Escape' && !event.repeat) {
     if (phase === 'rolling') pause();
     else if (phase === 'paused') { phase = 'rolling'; clearInput(); hideDialog(); }
@@ -229,8 +261,9 @@ function loop(now: number): void {
       elapsed += STEP;
       const result = advance(ball, controls, STAGES[index]);
       accumulator -= STEP;
+      if (ball.impact) sfx.bump(ball.impact);
       if (!checkpoint && Math.hypot(ball.x - STAGES[index].checkpoint.x, ball.z - STAGES[index].checkpoint.z) < 0.5) {
-        checkpoint = true; syncHud();
+        checkpoint = true; checkpointAt = elapsed; sfx.checkpoint(); syncHud();
       }
       if (result === 'fall') fell();
       else if (result === 'goal') goal();
@@ -240,6 +273,10 @@ function loop(now: number): void {
   }
   if (phase === 'fall' && fallAge < 0.7) {
     fallAge += dt;
+    if (fallHole) {
+      const pull = 1 - Math.exp(-14 * dt);
+      ball.x += (fallHole.x - ball.x) * pull; ball.z += (fallHole.z - ball.z) * pull;
+    }
     if (fallAge >= 0.7) fallDialog();
   }
   view.draw(ball, controls, checkpoint, phase === 'fall' ? Math.min(2.5, fallAge ** 2 * 7) : 0, phase === 'rolling' ? dt : 0);
@@ -250,4 +287,4 @@ view.load(STAGES[0]); syncHud(); menu();
 frame = requestAnimationFrame(loop);
 window.addEventListener('pagehide', () => { clearInput(); if (phase === 'rolling') pause(); });
 // Vite の差し替え時も WebGL 資源と描画ループを解放。
-if (import.meta.hot) import.meta.hot.dispose(() => { cancelAnimationFrame(frame); view.dispose(); tilt.dispose(); });
+if (import.meta.hot) import.meta.hot.dispose(() => { cancelAnimationFrame(frame); view.dispose(); tilt.dispose(); sfx.dispose(); });

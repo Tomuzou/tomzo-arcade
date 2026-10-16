@@ -115,3 +115,18 @@ test('mobile controls work and the UI fits a 390px screen', async ({ browser }) 
   await page.screenshot({ path: 'test-results/mobile.png' });
   await context.close();
 });
+
+test('holding the brake key through a fall does not press the dialog button on release', async ({ page }) => {
+  await page.goto('./');
+  // コース2のスタート(-2.8,4.7)から真上へ転がすと穴(-2.7,0.9)に落ちる。
+  await page.locator('[data-course="1"]').click();
+  await page.keyboard.down('ArrowUp');
+  await expect(page.locator('#falls')).toHaveText('1', { timeout: 10000 });
+  await page.keyboard.up('ArrowUp');
+  await page.keyboard.down('Space');
+  await expect(page.locator('#dialog-title')).toHaveText('穴に落ちちゃった。');
+  for (let i = 0; i < 5; i++) await page.keyboard.down('Space');
+  await page.keyboard.up('Space');
+  await expect(page.locator('#overlay')).toBeVisible();
+  await expect(page.locator('#dialog-title')).toHaveText('穴に落ちちゃった。');
+});
