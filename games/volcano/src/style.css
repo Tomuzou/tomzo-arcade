@@ -38,6 +38,8 @@ h1 span { color: #ffbd70; }
 .course-list b { color: #ffcb82; font-size: 16px; }
 .course-list span { flex: 1; font-size: 13px; }
 .course-list small { color: #91b7a5; font-size: 11px; }
+.course-group { color: #9d7bff; font-size: 10px; letter-spacing: 3px; text-align: left; margin: 8px 2px 0; }
+@media (min-width: 720px) { .dialog { max-width: 600px; } .course-list { grid-template-columns: 1fr 1fr; } .course-group { grid-column: 1 / -1; } }
 .dialog .total { font-size: 12px; margin: -4px auto 0; }
 .dialog .total b { color: #ffcb82; font-variant-numeric: tabular-nums; }
 .top-links button[aria-pressed="false"] { color: #82968f; }

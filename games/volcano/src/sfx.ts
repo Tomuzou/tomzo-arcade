@@ -1,3 +1,5 @@
+import type { BallEvent } from './physics';
+
 /**
  * WebAudio で合成する効果音。音源ファイルは持たない。
  * AudioContext は自動再生制限を避けるため、最初の再生時（ユーザー操作の後）に作る。
@@ -61,6 +63,27 @@ export class Sfx {
   goal(): void {
     if (!this.ensure()) return;
     [523, 659, 784, 1047].forEach((f, i) => this.tone(f, i * 0.09, i === 3 ? 0.5 : 0.16, 0.22, 'triangle'));
+  }
+
+  /** ブラックホールに吸い込まれる、下がり続ける渦の音。 */
+  blackHole(): void {
+    if (!this.ensure()) return;
+    this.tone(880, 0, 0.7, 0.2, 'sawtooth', 40);
+    this.tone(440, 0.05, 0.65, 0.15, 'sine', 30);
+  }
+
+  /** ギミックの出来事ごとの効果音。 */
+  event(kind: BallEvent): void {
+    if (!this.ensure()) return;
+    switch (kind) {
+      case 'jump': this.tone(300, 0, 0.3, 0.25, 'triangle', 900); break;
+      case 'land': this.tone(140, 0, 0.12, 0.3, 'sine', 60); break;
+      case 'warp':
+        this.tone(1200, 0, 0.25, 0.18, 'sine', 300);
+        this.tone(300, 0.12, 0.25, 0.18, 'sine', 1400);
+        break;
+      case 'bumper': this.tone(1046, 0, 0.12, 0.25, 'square', 1568); break;
+    }
   }
 
   dispose(): void { void this.ctx?.close(); this.ctx = null; }

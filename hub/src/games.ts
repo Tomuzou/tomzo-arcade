@@ -28,7 +28,7 @@ export const GAMES: GameEntry[] = [
     id: 'volcano',
     title: 'VOLCANO ROLL',
     tagline: '一粒を、頂上へ。',
-    description: '台を傾け、穴と坂をくぐり抜ける3D玉転がし。ブレーキを使いこなして全5コース、火山の頂上を目指そう。',
+    description: '台を傾け、穴と坂をくぐり抜ける3D玉転がし。全10コース。ジャンプ台・蟻地獄・ブラックホール・ワープ・段々畑のギミックコースも。',
     thumb: 'thumbs/volcano.jpg',
     path: 'volcano/',
     tags: ['3D', '玉転がし', 'バランス'],

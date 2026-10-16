@@ -1,7 +1,7 @@
 import './style.css';
 import { hubUrl, loadJson, saveJson } from '@tomzo-arcade/core';
 import { STAGES, type Point } from './stages';
-import { advance, STEP, type Ball, type Input } from './physics';
+import { advance, STEP, type Ball, type Input, type Outcome } from './physics';
 import { BoardScene } from './scene';
 import { TiltControls } from './tilt';
 import { Sfx } from './sfx';
@@ -53,6 +53,8 @@ let index = 0;
 let ball: Ball = { ...STAGES[0].start, vx: 0, vz: 0 };
 let elapsed = 0, falls = 0, checkpoint = false, checkpointAt = 0, fallAge = 0, accumulator = 0;
 let fallHole: Point | null = null;
+let fallCause: Outcome = 'fall';
+const label = (i: number) => String(i + 1).padStart(2, '0');
 let last = performance.now(), frame = 0, hudAge = 0;
 const held = new Set<string>();
 const keyDirections: Record<string, string> = {
@@ -65,7 +67,7 @@ const raw = loadJson<unknown>(KEY, {});
 const records: Record<string, number> = {};
 if (raw && typeof raw === 'object') {
   for (const [key, value] of Object.entries(raw)) {
-    if (/^[0-4]$/.test(key) && typeof value === 'number' && Number.isFinite(value) && value > 0) records[key] = value;
+    if (/^\d+$/.test(key) && Number(key) < STAGES.length && typeof value === 'number' && Number.isFinite(value) && value > 0) records[key] = value;
   }
 }
 const format = (seconds: number) => seconds.toFixed(1);
@@ -111,7 +113,7 @@ function clearInput(): void {
 }
 
 function syncHud(): void {
-  el('stage-label').textContent = `COURSE 0${index + 1} / ${STAGES[index].subtitle}`;
+  el('stage-label').textContent = `COURSE ${label(index)} / ${STAGES[index].subtitle}`;
   el('stage-name').textContent = STAGES[index].name;
   el('time').textContent = format(elapsed);
   el('falls').textContent = String(falls);
@@ -153,7 +155,8 @@ function start(course: number): void {
 function courseList(): string {
   const all = STAGES.every((_, i) => records[i]);
   const total = STAGES.reduce((sum, _, i) => sum + (records[i] ?? 0), 0);
-  return `<div class="course-list">${STAGES.map((stage, i) => `<button data-course="${i}"><b>0${i + 1}</b><span>${stage.name}</span><small>${records[i] ? `${format(records[i])} s` : '挑戦する →'}</small></button>`).join('')}</div>
+  // 6コース目からはギミックコースとして見出しを分ける。
+  return `<div class="course-list">${STAGES.map((stage, i) => `${i === 5 ? '<div class="course-group">GIMMICK COURSES</div>' : ''}<button data-course="${i}"><b>${label(i)}</b><span>${stage.name}</span><small>${records[i] ? `${format(records[i])} s` : '挑戦する →'}</small></button>`).join('')}</div>
     ${all ? `<p class="total">全コース合計ベスト <b>${format(total)} 秒</b></p>` : ''}`;
 }
 
@@ -162,7 +165,7 @@ function menu(): void {
   phase = 'menu';
   showDialog(`<div class="eyebrow">A LITTLE BALL. A BIG ADVENTURE.</div>
     <h2 id="dialog-title">一粒を、頂上へ。</h2>
-    <p>台を傾けて、穴や坂をくぐり抜けよう。<br>金色の輪に入ればゴール。ブレーキが攻略の鍵。</p>
+    <p>台を傾けて、穴や坂をくぐり抜けよう。<br>金色の輪に入ればゴール。ブレーキが攻略の鍵。<br>06からはジャンプ台やブラックホールが待っている。</p>
     ${courseList()}`);
 }
 
@@ -174,18 +177,25 @@ function pause(): void {
     ${courseList()}`);
 }
 
-function fell(): void {
-  phase = 'fall'; fallAge = 0; falls++;
-  // 吸い込まれる演出のため、いちばん近い穴へ玉を寄せていく。
-  const holes = STAGES[index].holes;
-  fallHole = holes.reduce((a, b) => Math.hypot(ball.x - a.x, ball.z - a.z) <= Math.hypot(ball.x - b.x, ball.z - b.z) ? a : b);
-  sfx.fall();
+function fell(cause: Outcome): void {
+  phase = 'fall'; fallAge = 0; falls++; fallCause = cause;
+  // 吸い込まれる演出のため、玉を飲み込んだ穴などの中心へ寄せていく。高さは地形に合わせ直す。
+  fallHole = ball.trap ?? null;
+  ball.y = undefined;
+  if (cause === 'blackhole') sfx.blackHole(); else sfx.fall();
   syncHud(); clearInput();
 }
 
+const FALL_TEXT: Partial<Record<Outcome, [string, string]>> = {
+  fall: ['穴に落ちちゃった。', '穴のそばでは、ブレーキを押しながらゆっくり。'],
+  pit: ['蟻地獄に食べられた！', '砂地では玉が重くなる。すり鉢の縁をなぞろう。'],
+  blackhole: ['ブラックホールに吸い込まれた！', '渦の外側を大きく回ろう。引かれたら反対へ全力で。'],
+};
+
 function fallDialog(): void {
-  showDialog(`<div class="eyebrow">ONE MORE ROLL</div><h2 id="dialog-title">穴に落ちちゃった。</h2>
-    <p>${checkpoint ? '中継地点から続けられます。' : 'スタート地点からもう一度。'}<br>穴のそばでは、ブレーキを押しながらゆっくり。</p>
+  const [title, tip] = FALL_TEXT[fallCause] ?? FALL_TEXT.fall!;
+  showDialog(`<div class="eyebrow">ONE MORE ROLL</div><h2 id="dialog-title">${title}</h2>
+    <p>${checkpoint ? '中継地点から続けられます。' : 'スタート地点からもう一度。'}<br>${tip}</p>
     <div class="actions"><button class="primary" data-action="retry">${checkpoint ? '中継地点から' : 'もう一度'}</button><button class="quiet" data-action="restart">最初から</button><button class="quiet" data-action="menu">コース選択</button></div>`);
 }
 
@@ -198,8 +208,8 @@ function goal(): void {
   syncHud();
   const all = STAGES.every((_, i) => records[i]);
   showDialog(`<div class="eyebrow">${best ? 'NEW BEST!' : 'NICE ROLL!'}</div>
-    <h2 id="dialog-title">${index === STAGES.length - 1 ? '頂上に到着！' : 'ゴール！'}</h2>
-    <p>${STAGES[index].name} · ${format(elapsed)} 秒 · 落下 ${falls} 回${previous ? `<br>前回ベスト ${format(previous)} 秒（${best ? '−' : '+'}${format(Math.abs(elapsed - previous))}）` : ''}<br>${all ? '全5コース制覇！ 次はベストタイムに挑戦。' : '一粒ぶんの冒険、クリア。'}</p>
+    <h2 id="dialog-title">${STAGES[index].clear ?? 'ゴール！'}</h2>
+    <p>${STAGES[index].name} · ${format(elapsed)} 秒 · 落下 ${falls} 回${previous ? `<br>前回ベスト ${format(previous)} 秒（${best ? '−' : '+'}${format(Math.abs(elapsed - previous))}）` : ''}<br>${all ? `全${STAGES.length}コース制覇！ 次はベストタイムに挑戦。` : '一粒ぶんの冒険、クリア。'}</p>
     <div class="actions">${index < STAGES.length - 1 ? '<button class="primary" data-action="next">次のコースへ →</button>' : '<button class="primary" data-action="menu">コース選択</button>'}<button class="quiet" data-action="restart">もう一度</button>${index < STAGES.length - 1 ? '<button class="quiet" data-action="menu">コース選択</button>' : ''}</div>`);
 }
 
@@ -262,24 +272,33 @@ function loop(now: number): void {
       const result = advance(ball, controls, STAGES[index]);
       accumulator -= STEP;
       if (ball.impact) sfx.bump(ball.impact);
+      if (ball.event) sfx.event(ball.event);
       if (!checkpoint && Math.hypot(ball.x - STAGES[index].checkpoint.x, ball.z - STAGES[index].checkpoint.z) < 0.5) {
         checkpoint = true; checkpointAt = elapsed; sfx.checkpoint(); syncHud();
       }
-      if (result === 'fall') fell();
-      else if (result === 'goal') goal();
+      if (result === 'goal') goal();
+      else if (result !== 'rolling') fell(result);
     }
     hudAge += dt;
     if (hudAge > 0.1) { syncHud(); hudAge = 0; }
   }
   if (phase === 'fall' && fallAge < 0.7) {
     fallAge += dt;
-    if (fallHole) {
+    if (fallHole && fallCause === 'blackhole') {
+      // ブラックホールは渦を巻きながら中心へ。
+      const dx = ball.x - fallHole.x, dz = ball.z - fallHole.z;
+      const angle = Math.atan2(dz, dx) - 9 * dt, radius = Math.hypot(dx, dz) * Math.exp(-5 * dt);
+      ball.x = fallHole.x + Math.cos(angle) * radius; ball.z = fallHole.z + Math.sin(angle) * radius;
+    } else if (fallHole) {
       const pull = 1 - Math.exp(-14 * dt);
       ball.x += (fallHole.x - ball.x) * pull; ball.z += (fallHole.z - ball.z) * pull;
     }
     if (fallAge >= 0.7) fallDialog();
   }
-  view.draw(ball, controls, checkpoint, phase === 'fall' ? Math.min(2.5, fallAge ** 2 * 7) : 0, phase === 'rolling' ? dt : 0);
+  const falling = fallHole !== null && phase !== 'rolling';
+  const vortex = falling && fallCause === 'blackhole';
+  view.draw(ball, controls, checkpoint, falling && !vortex ? Math.min(2.5, fallAge ** 2 * 7) : 0, phase === 'rolling' ? dt : 0,
+    vortex ? Math.max(0, 1 - fallAge / 0.6) : 1);
   frame = requestAnimationFrame(loop);
 }
 

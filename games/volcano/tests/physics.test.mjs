@@ -58,14 +58,21 @@ test('a swept ball cannot skip over a small hole or goal', () => {
   assert.equal(advance(goalBall, idle, flat), 'goal');
 });
 
-test('all five courses have a playable route to the goal using ordinary input', () => {
+test('every course has a playable route to the goal using ordinary input', () => {
   const routes = [
     [[0, -4.7]],
     [[-2.8, 3], [-1.4, 3], [-1.4, 0], [0, 0], [1.35, -2.4], [2.8, -3.5], [2.8, -4.7]],
     [[2.7, 3], [2.7, -0.7], [2.7, -4.7], [0, -4.7]],
     [[0, 4.2], [4.05, 4.1], [4.05, 1], [-3.8, 1], [-3.8, -1.1], [3.8, -1.1], [3.8, -4.7], [2.8, -4.7]],
     [[0, 0.5], [0, -1.5]],
+    // ここからギミックコース。ジャンプ台・ワープの地点を通ったら次の目標へ進む。
+    [[-2.6, 2.0], [-3.3, -2.6], [-2.1, -3.6], [3.1, -4.9]],
+    [[-3.4, 3.5], [-3.4, -0.6], [-1.0, -1.6], [0, -3.0], [0, -4.8]],
+    [[-3.8, 3.5], [-3.8, -0.5], [0.8, -3.8], [2.6, -4.8]],
+    [[-3, 2.3], [2.6, 2.3], [3.3, 3.0], [-2.6, -1.6], [2.9, -1.7], [3.5, -1.3], [-1.0, -2.9], [0, -4.2], [1.9, -4.6], [3.2, -5]],
+    [[3.2, 4.8], [3.2, 1.0], [3.4, -0.2], [2.4, -1.2], [-3, -4.8]],
   ];
+  assert.equal(routes.length, STAGES.length);
   STAGES.forEach((stage, index) => {
     const ball = { ...stage.start, vx: 0, vz: 0 };
     let target = 0, outcome = 'rolling';
@@ -74,13 +81,14 @@ test('all five courses have a playable route to the goal using ordinary input', 
       const dx = x - ball.x, dz = z - ball.z;
       if (Math.hypot(dx, dz) < 0.18 && target < routes[index].length - 1) target++;
       // 低速で道筋を追う。坂の重力に逆らう分も入力範囲内で補償。
-      const gradient = slope(stage, ball.x, ball.z);
+      const gradient = ball.air ? { x: 0, z: 0 } : slope(stage, ball.x, ball.z);
       const controls = {
         x: Math.max(-1, Math.min(1, (dx * 3 - ball.vx * 3 + gradient.x * 9) / 6.5)),
         z: Math.max(-1, Math.min(1, (dz * 3 - ball.vz * 3 + gradient.z * 9) / 6.5)),
         brake: false,
       };
       outcome = advance(ball, controls, stage, STEP);
+      if (ball.event === 'jump' || ball.event === 'warp') target = Math.min(target + 1, routes[index].length - 1);
     }
     assert.equal(outcome, 'goal', `course ${index + 1}: ${JSON.stringify(ball)}`);
   });
@@ -92,4 +100,67 @@ test('wall and rail impacts report the hit speed for sound, and free rolling rep
   assert.ok(ball.impact > 2.5);
   advance(ball, idle, flat);
   assert.equal(ball.impact, 0);
+});
+
+const roll = (ball, stage, steps, input = idle) => {
+  let outcome = 'rolling';
+  for (let i = 0; i < steps && outcome === 'rolling'; i++) outcome = advance(ball, input, stage);
+  return outcome;
+};
+
+test('a jump pad launches the ball over a hole, and it lands back on the ground', () => {
+  const stage = { ...flat, goal: { x: 4, z: 5 }, holes: [{ x: 0, z: -2, radius: 0.7 }], jumps: [{ x: 0, z: 0, dx: 0, dz: -1 }] };
+  const ball = { x: 0, z: 0.3, vx: 0, vz: -0.5 };
+  advance(ball, idle, stage);
+  assert.equal(ball.event, 'jump');
+  assert.ok(ball.air && ball.vz < -4);
+  assert.equal(roll(ball, stage, 240), 'rolling');
+  assert.ok(!ball.air && ball.z < -3);
+});
+
+test('rolling fast off a cliff edge leaves the ground, and walking into a tall cliff is blocked', () => {
+  const stage = { ...flat, plateaus: [{ x: 0, z: 3, width: 20, depth: 6, height: 0.8, edge: 0.35 }] };
+  const ball = { x: 0, z: 0.6, vx: 0, vz: -4 };
+  let flew = false;
+  for (let i = 0; i < 60; i++) { advance(ball, idle, stage); flew ||= !!ball.air; }
+  assert.ok(flew);
+  const climber = { x: 0, z: -1, vx: 0, vz: 1 };
+  roll(climber, stage, 240, { ...idle, z: 1 });
+  assert.ok(climber.z < 0.2, `climbed to ${climber.z}`);
+});
+
+test('an antlion pit drags the ball in and swallows it at the center', () => {
+  const stage = { ...flat, pits: [{ x: 0, z: 0, radius: 2, depth: 1 }] };
+  const ball = { x: 1.2, z: 0, vx: 0, vz: 0 };
+  assert.equal(roll(ball, stage, 600), 'pit');
+  assert.deepEqual(ball.trap, { x: 0, z: 0 });
+  const sand = { x: 1.2, z: 0, vx: 0, vz: 3 }, plain = { x: 1.2, z: 0, vx: 0, vz: 3 };
+  advance(sand, idle, stage); advance(plain, idle, flat);
+  assert.ok(sand.vz < plain.vz);
+});
+
+test('a black hole pulls from a distance, can be escaped early, and swallows up close', () => {
+  const stage = { ...flat, blackHoles: [{ x: 0, z: 0, range: 3, strength: 6 }] };
+  assert.equal(roll({ x: 0.9, z: 0, vx: 0, vz: 0 }, stage, 600), 'blackhole');
+  const escaping = { x: 1.8, z: 0, vx: 0, vz: 0 };
+  assert.equal(roll(escaping, stage, 240, { ...idle, x: 1 }), 'rolling');
+  assert.ok(escaping.x > 3);
+});
+
+test('a warp moves the ball to its partner, keeps its speed, and does not bounce straight back', () => {
+  const stage = { ...flat, warps: [{ a: { x: 0, z: 3 }, b: { x: 0, z: -3 } }] };
+  const ball = { x: 0, z: 3.3, vx: 0, vz: -2 };
+  roll(ball, stage, 30);
+  assert.ok(ball.z < -3 && ball.vz < 0);
+  assert.equal(ball.warpLock, 0);
+  roll(ball, stage, 120);
+  assert.ok(ball.z < -3.6);
+});
+
+test('a bumper kicks the ball away even when it touches slowly', () => {
+  const stage = { ...flat, bumpers: [{ x: 0, z: 0, radius: 0.4 }] };
+  const ball = { x: 0, z: 0.62, vx: 0, vz: -0.3 };
+  advance(ball, idle, stage);
+  assert.equal(ball.event, 'bumper');
+  assert.ok(ball.vz > 3);
 });

@@ -50,7 +50,7 @@ test('keyboard play reaches the goal, stores a best time, and advances courses',
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('./');
-  await expect(page.locator('[data-course]')).toHaveCount(5);
+  await expect(page.locator('[data-course]')).toHaveCount(10);
   await expect(page.locator('#arcade')).toHaveAttribute('href', '/tomzo-arcade/');
   await page.locator('[data-course="0"]').click();
   await page.keyboard.down('ArrowUp');
@@ -67,7 +67,7 @@ test('keyboard play reaches the goal, stores a best time, and advances courses',
   await page.locator('#arcade').click();
   await expect(page).toHaveURL('http://127.0.0.1:4180/tomzo-arcade/');
   await page.getByRole('link', { name: 'VOLCANO ROLLで遊ぶ', exact: true }).click();
-  await expect(page.locator('[data-course]')).toHaveCount(5);
+  await expect(page.locator('[data-course]')).toHaveCount(10);
   expect(errors).toEqual([]);
 });
 
@@ -78,7 +78,7 @@ test('pause freezes the clock, resuming releases held keys, and R resets the run
   await page.waitForTimeout(350);
   await page.getByRole('button', { name: 'メニュー', exact: true }).click();
   await expect(page.locator('#dialog-title')).toHaveText('一時停止');
-  await expect(page.locator('[data-course]')).toHaveCount(5);
+  await expect(page.locator('[data-course]')).toHaveCount(10);
   await expect(page.getByRole('link', { name: '← ゲーム選択' })).toBeVisible();
   await page.locator('[data-action="resume"]').focus();
   await page.keyboard.press('Shift+Tab');
