@@ -1,101 +1,80 @@
 <!doctype html>
 <html lang="ja">
-  <head>
-    <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-    />
-    <title>GIMMICK BOWLING</title>
-    <style>
-      html,
-      body {
-        margin: 0;
-        padding: 0;
-        overflow: hidden;
-        background: #111;
-      }
-      #app {
-        width: 100vw;
-        height: 100vh;
-      }
-      #hud {
-        position: fixed;
-        top: 12px;
-        left: 12px;
-        color: #fff;
-        font-family: system-ui, sans-serif;
-        font-size: 14px;
-        background: rgba(0, 0, 0, 0.5);
-        padding: 8px 12px;
-        border-radius: 8px;
-        pointer-events: none;
-        line-height: 1.6;
-        /* 右上の ← ARCADE と重ならない幅に収める */
-        max-width: calc(100vw - 170px);
-      }
-      #arcade-link {
-        position: fixed;
-        top: max(12px, env(safe-area-inset-top));
-        right: 12px;
-        padding: 8px 12px;
-        color: #fff;
-        font-family: system-ui, sans-serif;
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 1px;
-        text-decoration: none;
-        background: rgba(0, 0, 0, 0.5);
-        border: 1px solid rgba(255, 255, 255, 0.4);
-        border-radius: 999px;
-      }
-      #arcade-link[hidden] {
-        display: none;
-      }
-      #controls {
-        position: fixed;
-        bottom: max(16px, env(safe-area-inset-bottom));
-        left: 50%;
-        transform: translateX(-50%);
-        display: flex;
-        gap: 12px;
-        touch-action: none;
-        user-select: none;
-        -webkit-user-select: none;
-      }
-      #controls button {
-        min-width: 64px;
-        height: 56px;
-        font-size: 20px;
-        color: #fff;
-        background: rgba(0, 0, 0, 0.55);
-        border: 1px solid rgba(255, 255, 255, 0.4);
-        border-radius: 12px;
-        touch-action: none;
-        -webkit-tap-highlight-color: transparent;
-        cursor: pointer;
-      }
-      #controls button:active {
-        background: rgba(255, 255, 255, 0.25);
-      }
-    </style>
-  </head>
-  <body>
-    <div id="app"></div>
-    <a id="arcade-link" hidden>← ARCADE</a>
-    <div id="hud">
-      🎳 GIMMICK BOWLING — <span id="mode-name">ノーマル</span><br />
-      <b>Space</b>: 投球 / <b>←→</b>: 移動(バンク時は角度) / <b>R</b>: リセット /
-      <b>M</b>: モード切替<br />
-      倒れたピン: <span id="pin-count">0</span> / <span id="pin-total">10</span>
-    </div>
-    <div id="controls">
-      <button id="btn-left" aria-label="左へ">◀</button>
-      <button id="btn-throw" aria-label="投球">🎳 投球</button>
-      <button id="btn-reset" aria-label="リセット">↺</button>
-      <button id="btn-mode" aria-label="モード切替">🔄</button>
-      <button id="btn-right" aria-label="右へ">▶</button>
-    </div>
-    <script type="module" src="/src/main.ts"></script>
-  </body>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#14383d" />
+  <meta name="description" content="ボールを引っぱって、離して投球。曲面でUターンする3Dバンクボウリング。" />
+  <title>BANK BOWLING — TOMZO ARCADE</title>
+</head>
+<body>
+  <div class="shell">
+    <header class="header">
+      <a class="brand" href="#" aria-label="BANK BOWLING"><span class="brand-icon">◉</span><span><small>TOMZO ARCADE</small><h1>BANK <em>BOWLING</em></h1></span></a>
+      <nav class="header-actions" aria-label="ゲームメニュー">
+        <button id="btn-courses">☰ コース</button>
+        <button id="btn-help">遊び方 <span>?</span></button>
+        <button id="btn-sound" aria-pressed="true">音 ON</button>
+        <a id="arcade-link" hidden>← ARCADE</a>
+      </nav>
+    </header>
+    <main class="game">
+      <section class="course-heading">
+        <div class="course-name"><span id="course-number" class="eyebrow"></span><h2 id="course-title"></h2></div>
+        <div class="course-tools"><button id="btn-camera" title="プレイ・全体・ピン拡大（V）">視点：プレイ</button><button id="btn-reset" title="やり直す（R）">↻ やり直す</button></div>
+      </section>
+      <section class="arena-wrap" aria-label="3Dボウリングコース">
+        <div id="app"></div>
+        <div class="scoreboard">
+          <div class="score-main"><span>SCORE</span><strong id="score">0</strong><small>pt</small></div>
+          <div class="score-target"><span>目標 <b id="target">115</b> pt</span><progress id="score-progress" value="0" max="115"></progress></div>
+          <div class="score-stat"><span>倒したピン</span><b id="pin-count">0 / 65</b></div>
+          <div class="score-stat"><span>投球</span><b id="throw-count">0 / 3</b></div>
+        </div>
+        <div class="arena-caption"><span class="live-dot"></span><span id="shot-status" role="status">ボールを引っぱって、離すと投球</span></div>
+        <div id="throw-overlay">
+          <svg id="gesture-lines" aria-hidden="true">
+            <defs><marker id="arrow-tip" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M 0 1 L 8 4.5 L 0 8" fill="none" stroke="#fff0ac" stroke-width="1.8" /></marker></defs>
+            <path id="gesture-cord" /><path id="gesture-arrow" marker-end="url(#arrow-tip)" />
+          </svg>
+          <button id="ball-handle" aria-label="ボールを引っぱって投球。矢印キーで方向と強さを調整、Enterで投球。"><span></span></button>
+          <div id="gesture-readout"></div><div id="gesture-instruction">ボールを引いて、離す</div>
+        </div>
+        <div class="arena-bottom">
+          <div id="pin-legend" class="pin-legend"><span><i class="white"></i>1</span><span><i class="blue"></i>5</span><span><i class="red"></i>100 <small>pt</small></span></div>
+          <div id="classic-legend" class="pin-legend" hidden>1ピン = 10 pt</div>
+          <span class="camera-note">ピンに近づくと自動で拡大</span>
+        </div>
+      </section>
+      <section class="controls" aria-label="投球コントロール">
+        <div class="gesture-help"><b>引いて、狙って、離す。</b><span>長く引くほど強く投球</span></div>
+        <div class="position-control"><span>立ち位置</span><div><button id="position-left" aria-label="立ち位置を左へ">‹</button><output id="position-value">中央</output><button id="position-right" aria-label="立ち位置を右へ">›</button></div></div>
+        <label class="spin-control"><span>スピン <output id="spin-value">なし</output></span><input id="spin" type="range" min="-3" max="3" step="0.5" value="0" /><small>左カーブ <span>右カーブ</span></small></label>
+        <div class="throw-action"><button id="btn-throw">この狙いで投球 ↗</button><span id="aim-summary">8.5° / 65%</span></div>
+      </section>
+    </main>
+  </div>
+  <dialog id="courses" class="modal course-dialog" aria-labelledby="courses-title">
+    <button id="courses-close" class="modal-close" aria-label="コース選択を閉じる">×</button>
+    <span class="eyebrow">SELECT COURSE / 06</span><h2 id="courses-title">今日は、どのコース？</h2>
+    <p id="course-description"></p>
+    <div id="stage-list" class="stage-list" aria-label="ステージ選択"></div>
+    <div class="sidebar-bottom"><button id="btn-practice" aria-pressed="false">練習モード</button><div class="record"><span>このコースの自己ベスト</span><b><span id="best">0</span> <small>pt</small></b></div></div>
+    <p class="muted" id="hint"></p>
+  </dialog>
+  <dialog id="result" class="modal" aria-labelledby="result-title">
+    <button id="result-close" class="modal-close" aria-label="結果を閉じる">×</button>
+    <span id="result-eyebrow" class="eyebrow">COURSE CLEAR</span><div id="result-stars" class="result-stars">★★★</div>
+    <h2 id="result-title">ナイス・バンク！</h2><div class="result-points"><b id="result-score">0</b><span>pt</span></div>
+    <p id="result-detail"></p><p id="result-note" class="muted"></p>
+    <div class="modal-actions"><button id="result-retry">もう一度</button><button id="result-next" class="primary">次のコース →</button></div>
+  </dialog>
+  <dialog id="help" class="modal help" aria-labelledby="help-title">
+    <span class="eyebrow">HOW TO PLAY</span><h2 id="help-title">ボールを引いて、離す。</h2>
+    <ol><li><b>光る輪のボールをつかむ。</b><p>矢印と反対の方向に引っぱります。引く向きで投球の方向、長さで強さが変わります。</p></li><li><b>矢印を見て、指を離す。</b><p>その方向へボールを投球。ボールの位置まで指を戻して離すとキャンセルできます。スピンだけは下のバーで調整します。</p></li><li><b>帰りのボールで、赤ピンを狙う。</b><p>白1点・青5点・赤100点。目標点でクリア。ピンへ戻ると自動で拡大します。「視点」ボタンで全体・ピン拡大にも切り替えられます。</p></li></ol>
+    <p class="muted">キーボード：←→ 方向、↑↓ 強さ、Space 投球、R やり直す、V 視点。ボールをフォーカスしてEnterでも投球できます。コース選択から球数無制限の練習モードへ。練習は記録対象外です。</p>
+    <button id="help-close" class="primary">さっそく投げる →</button>
+  </dialog>
+  <script type="module" src="/src/main.ts"></script>
+</body>
 </html>

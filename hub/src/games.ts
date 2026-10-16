@@ -54,8 +54,8 @@ export const GAMES: GameEntry[] = [
   {
     id: 'bowling',
     title: 'GIMMICK BOWLING',
-    tagline: '壁で曲げて、全部倒す。',
-    description: '3Dボウリング。普通のレーンに加えて、反発壁とバンパーを使って狙うバンクボウリングモード。',
+    tagline: '曲げる。戻る。倒す。',
+    description: '高台から投げ、曲面バンクでUターン。星形65ピン、動くゲート、バンパー、100ピンなど全6コースの3Dボウリング。',
     thumb: 'thumbs/bowling.jpg',
     path: 'bowling/',
     tags: ['3D', 'スポーツ', '物理'],

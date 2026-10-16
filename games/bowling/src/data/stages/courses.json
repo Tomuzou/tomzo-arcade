@@ -1,0 +1,155 @@
+[
+  {
+    "id": "star-bank",
+    "name": "スター・バンク",
+    "subtitle": "THE ORIGINAL",
+    "description": "高台からバンクへ。Uターンしたボールで、星の中心を射抜こう。",
+    "hint": "まずはそのまま投球。戻る軌道を見て、角度を少しずつ調整しよう。",
+    "type": "bank",
+    "layout": "star",
+    "accent": "#f5b85b",
+    "target": 115,
+    "throws": 3,
+    "angle": 8.5,
+    "power": 65,
+    "obstacles": []
+  },
+  {
+    "id": "swing-gate",
+    "name": "スイング・ゲート",
+    "subtitle": "TIME YOUR SHOT",
+    "description": "帰り道を横切るゲート。開く一瞬を読んで投げよう。",
+    "hint": "ゲートは左右に動く。ボールが戻ってくる時間まで考えて投げよう。",
+    "type": "bank",
+    "layout": "star",
+    "accent": "#73d9c9",
+    "target": 110,
+    "throws": 3,
+    "angle": 8.5,
+    "power": 65,
+    "obstacles": [
+      {
+        "position": [
+          0.6,
+          0.35,
+          -8.5
+        ],
+        "size": [
+          2.5,
+          0.7,
+          0.28
+        ],
+        "motion": {
+          "axis": "x",
+          "amplitude": 2.1,
+          "speed": 1.15
+        }
+      }
+    ]
+  },
+  {
+    "id": "bumper-club",
+    "name": "バンパー・クラブ",
+    "subtitle": "PLAY THE REBOUND",
+    "description": "ダイヤ型のバンパーで、帰りのコースが変わる。反射を味方に。",
+    "hint": "左右のバンパーの間を通すか、側面に当ててピンの横を狙おう。",
+    "type": "bank",
+    "layout": "star",
+    "accent": "#ef947c",
+    "target": 110,
+    "throws": 3,
+    "angle": 8.5,
+    "power": 65,
+    "obstacles": [
+      {
+        "position": [
+          -1.4,
+          0.32,
+          -8.3
+        ],
+        "size": [
+          0.9,
+          0.64,
+          0.9
+        ],
+        "rotationYDeg": 45
+      },
+      {
+        "position": [
+          2.7,
+          0.32,
+          -8.3
+        ],
+        "size": [
+          0.9,
+          0.64,
+          0.9
+        ],
+        "rotationYDeg": 45
+      }
+    ]
+  },
+  {
+    "id": "twin-stars",
+    "name": "ツイン・ターゲット",
+    "subtitle": "CHOOSE YOUR LINE",
+    "description": "離れた2つのピンデッキ。赤いピンを2本とも狙う作戦勝負。",
+    "hint": "左の島は角度を小さく、右の島は大きく。1投ずつ狙いを変えよう。",
+    "type": "bank",
+    "layout": "split",
+    "accent": "#b5a1ed",
+    "target": 210,
+    "throws": 3,
+    "angle": 5,
+    "power": 65,
+    "obstacles": []
+  },
+  {
+    "id": "century",
+    "name": "100ピン・フェス",
+    "subtitle": "MAKE SOME NOISE",
+    "description": "100本のピンが待つ最終ステージ。回転アームを抜けて連鎖を起こせ。",
+    "hint": "赤ピンは中央付近。残ったピンの多い側へ立ち位置と角度を変えよう。",
+    "type": "bank",
+    "layout": "hundred",
+    "accent": "#f5b85b",
+    "target": 145,
+    "throws": 4,
+    "angle": 8,
+    "power": 65,
+    "obstacles": [
+      {
+        "position": [
+          0.6,
+          0.28,
+          -9.1
+        ],
+        "size": [
+          2.8,
+          0.56,
+          0.22
+        ],
+        "motion": {
+          "axis": "rotate",
+          "amplitude": 0,
+          "speed": 0.8
+        }
+      }
+    ]
+  },
+  {
+    "id": "classic",
+    "name": "クラシック・レーン",
+    "subtitle": "BACK TO BASICS",
+    "description": "まっすぐなレーンで10本勝負。角度とスピンの練習にも。",
+    "hint": "先頭ピンの少し右を狙うのがストライクのコツ。2投で全部倒そう。",
+    "type": "straight",
+    "layout": "standard",
+    "accent": "#73d9c9",
+    "target": 100,
+    "throws": 2,
+    "angle": 0,
+    "power": 65,
+    "obstacles": []
+  }
+]

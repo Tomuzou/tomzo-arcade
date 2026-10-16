@@ -1,5 +1,6 @@
 import { hubUrl } from "@tomzo-arcade/core";
 import { Game } from "./core/Game";
+import './style.css';
 
 const container = document.getElementById("app");
 if (!container) {

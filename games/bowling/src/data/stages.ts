@@ -1,88 +1,57 @@
-import { HEAD_PIN_Z, LANE_LENGTH, LANE_WIDTH, PIN_SPACING } from "../core/constants";
-
-// ステージ定義。将来 SPEC.md §7 の JSON 形式(src/data/stages/*.json)に移行する前段の TS データ版
+import definitions from './stages/courses.json';
 
 export interface ObstacleDef {
   position: [number, number, number];
   size: [number, number, number];
   rotationYDeg?: number;
+  motion?: { axis: 'x' | 'rotate'; amplitude: number; speed: number; phase?: number };
 }
-
 export interface StageDef {
   id: string;
   name: string;
-  lane: { width: number; length: number };
-  walls: ObstacleDef[];
-  /** ピン位置 [x, z] の配列 */
-  pinPositions: [number, number][];
-  /** position: ←→で立ち位置移動 / angle: ←→で投球角度を変える(バンクショット用) */
-  aimMode: "position" | "angle";
-  camera: { position: [number, number, number]; lookAt: [number, number, number] };
+  subtitle: string;
+  description: string;
+  hint: string;
+  type: 'bank' | 'straight';
+  layout: 'star' | 'split' | 'hundred' | 'standard';
+  accent: string;
+  target: number;
+  throws: number;
+  angle: number;
+  power: number;
+  obstacles: ObstacleDef[];
 }
+export interface PinDef { x: number; z: number; points: number }
+export const STAGES = definitions as StageDef[];
 
-/** 標準10ピン配置(正三角形、1番ピンが手前) */
-function standard10(): [number, number][] {
-  const positions: [number, number][] = [];
-  const rowSpacingZ = PIN_SPACING * Math.sin(Math.PI / 3);
-  for (let row = 0; row < 4; row++) {
-    for (let i = 0; i <= row; i++) {
-      positions.push([(i - row / 2) * PIN_SPACING, HEAD_PIN_Z - row * rowSpacingZ]);
-    }
+export function pinLayout(layout: StageDef['layout']): PinDef[] {
+  if (layout === 'standard') {
+    return Array.from({ length: 4 }, (_, row) => Array.from({ length: row + 1 }, (_, col) => ({
+      x: (col - row / 2) * 0.38, z: -10 - row * 0.33, points: 10,
+    }))).flat();
   }
-  return positions;
+  if (layout === 'hundred') {
+    return Array.from({ length: 100 }, (_, i) => ({
+      x: (i % 10 - 4.5) * 0.38 + 0.7, z: -7.4 + Math.floor(i / 10) * 0.38,
+      points: i === 45 ? 100 : i % 9 === 0 ? 5 : 1,
+    }));
+  }
+  if (layout === 'split') {
+    return [-1.25, 2.15].flatMap((center) => Array.from({ length: 5 }, (_, row) =>
+      Array.from({ length: row + 1 }, (_, col) => ({
+        x: center + (col - row / 2) * 0.38, z: -6.7 + row * 0.34,
+        points: row === 2 && col === 1 ? 100 : row === 1 ? 5 : 1,
+      }))).flat());
+  }
+  // Sample a five-point star on a staggered grid, preserving a fixed 65-pin total.
+  const candidates: (PinDef & { rank: number })[] = [];
+  for (let row = -8; row <= 8; row++) for (let col = -8; col <= 8; col++) {
+    const x = (col + (Math.abs(row) % 2) * 0.5) * 0.36;
+    const z = row * 0.32;
+    const angle = Math.atan2(x, -z);
+    const radius = 1.4 + 0.65 * Math.cos(angle * 5);
+    candidates.push({ x: x + 0.7, z: z - 5.6, rank: Math.hypot(x, z) / radius, points: 1 });
+  }
+  return candidates.sort((a, b) => a.rank - b.rank).slice(0, 65)
+    .map((pin, i) => ({ x: pin.x, z: pin.z, points: i === 0 ? 100 : i < 13 ? 5 : 1 }));
 }
-
-/** ノーマルモード: 普通のボーリングレーン */
-export const STANDARD_STAGE: StageDef = {
-  id: "standard",
-  name: "ノーマル",
-  lane: { width: LANE_WIDTH, length: LANE_LENGTH },
-  walls: [],
-  pinPositions: standard10(),
-  aimMode: "position",
-  camera: { position: [0, 1.8, 2.5], lookAt: [0, 0.3, HEAD_PIN_Z] },
-};
-
-/**
- * バンクモード(VS嵐のバンクボウリング風):
- * 広いフィールドの左右が反発壁になっていて、壁に当てて跳ね返すバンクショットで
- * バンパーの陰や中央ガード裏に散らばったピンを狙う
- */
-export const BANK_STAGE: StageDef = {
-  id: "bank",
-  name: "バンクボウリング",
-  lane: { width: 5, length: 14 },
-  walls: [
-    // 左右のバンク壁(全長)と奥の壁
-    { position: [-2.55, 0.15, -7], size: [0.1, 0.3, 14] },
-    { position: [2.55, 0.15, -7], size: [0.1, 0.3, 14] },
-    { position: [0, 0.15, -14.05], size: [5.2, 0.3, 0.1] },
-    // 中央のダイヤ型バンパー(45°回転した箱)
-    { position: [-1.3, 0.2, -7], size: [0.6, 0.4, 0.6], rotationYDeg: 45 },
-    { position: [1.3, 0.2, -7], size: [0.6, 0.4, 0.6], rotationYDeg: 45 },
-    { position: [0, 0.2, -9], size: [0.7, 0.4, 0.7], rotationYDeg: 45 },
-    // 中央クラスターを守るガード壁(正面からは狙えない)
-    { position: [0, 0.2, -11.8], size: [1.4, 0.4, 0.15] },
-  ],
-  pinPositions: [
-    // 左奥クラスター
-    [-2.1, -12.6],
-    [-1.7, -13.1],
-    [-2.3, -13.3],
-    // 右奥クラスター
-    [2.1, -12.6],
-    [1.7, -13.1],
-    [2.3, -13.3],
-    // 中央クラスター(ガード壁の裏。バンクショットでしか狙えない)
-    [0, -12.8],
-    [-0.35, -13.3],
-    [0.35, -13.3],
-    // 中盤のフリーピン
-    [-0.9, -10.3],
-    [0.9, -10.3],
-  ],
-  aimMode: "angle",
-  camera: { position: [0, 5.5, 4], lookAt: [0, 0, -7.5] },
-};
-
-export const STAGES: StageDef[] = [STANDARD_STAGE, BANK_STAGE];
